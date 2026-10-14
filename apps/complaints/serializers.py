@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
@@ -141,16 +142,18 @@ class ComplaintCreateSerializer(serializers.ModelSerializer):
                 'issue_type': 'Loại sự cố này không phù hợp với trạng thái hiện tại của booking.'
             })
 
-        # Khóa schedule trước khi check trùng để 2 request song song bị serialize
-        # (view bọc create trong transaction.atomic).
+        # Khóa schedule trước khi check trùng để 2 request song song bị serialize.
+        # Bọc atomic riêng để chạy được cả khi gọi ngoài transaction (chatbot);
+        # trong view (đã có atomic) thì thành savepoint, vẫn giữ khóa đến hết transaction.
         if schedule:
-            BookingSchedule.objects.select_for_update(of=('self',)).get(pk=schedule.pk)
-            if Complaint.objects.filter(
-                schedule=schedule, reporter=user,
-            ).exclude(status=Complaint.Status.CANCELLED).exists():
-                raise serializers.ValidationError({
-                    'schedule': 'Bạn đã tạo khiếu nại cho buổi làm việc này rồi.'
-                })
+            with transaction.atomic():
+                BookingSchedule.objects.select_for_update(of=('self',)).get(pk=schedule.pk)
+                if Complaint.objects.filter(
+                    schedule=schedule, reporter=user,
+                ).exclude(status=Complaint.Status.CANCELLED).exists():
+                    raise serializers.ValidationError({
+                        'schedule': 'Bạn đã tạo khiếu nại cho buổi làm việc này rồi.'
+                    })
 
         return attrs
 

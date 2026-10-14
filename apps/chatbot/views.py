@@ -8,7 +8,7 @@ from apps.ai_engine.models import ChatbotSession
 from apps.common.throttling import WriteScopedThrottleMixin
 from .exceptions import ChatbotError
 from .models import ChatbotRun
-from .permissions import IsChatbotCustomer
+from .permissions import IsChatbotUser
 from .serializers import (ConversationCreateSerializer, ConversationSerializer,
                           ConversationUpdateSerializer, MessageInputSerializer,
                           MessageReplySerializer, MessageSerializer, RunDetailSerializer, RunSerializer)
@@ -18,20 +18,20 @@ from .serializers import HelpArticleSerializer
 
 
 class HelpArticleListView(generics.ListAPIView):
-    permission_classes = [IsChatbotCustomer]
+    permission_classes = [IsChatbotUser]
     serializer_class = HelpArticleSerializer
     pagination_class = None
 
     def get_queryset(self):
-        return published_articles().defer('keywords')
+        return published_articles(self.request.user.role).defer('keywords')
 
 
 class HelpArticleDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsChatbotCustomer]
+    permission_classes = [IsChatbotUser]
     serializer_class = HelpArticleSerializer
 
     def get_queryset(self):
-        return published_articles()
+        return published_articles(self.request.user.role)
 
 
 class ChatbotPagination(PageNumberPagination):
@@ -46,7 +46,7 @@ class ChatbotPagination(PageNumberPagination):
                        request=ConversationCreateSerializer, responses={201: ConversationSerializer}),
 )
 class ConversationListCreateView(WriteScopedThrottleMixin, generics.ListCreateAPIView):
-    permission_classes = [IsChatbotCustomer]
+    permission_classes = [IsChatbotUser]
     serializer_class = ConversationSerializer
     pagination_class = ChatbotPagination
     write_throttle_scope = 'chatbot'
@@ -69,7 +69,7 @@ class ConversationListCreateView(WriteScopedThrottleMixin, generics.ListCreateAP
                          responses={204: None}),
 )
 class ConversationDetailView(WriteScopedThrottleMixin, generics.GenericAPIView):
-    permission_classes = [IsChatbotCustomer]
+    permission_classes = [IsChatbotUser]
     serializer_class = ConversationSerializer
     write_throttle_scope = 'chatbot'
 
@@ -106,7 +106,7 @@ class ConversationDetailView(WriteScopedThrottleMixin, generics.GenericAPIView):
                        responses={200: MessageReplySerializer, 201: MessageReplySerializer}),
 )
 class MessageListCreateView(WriteScopedThrottleMixin, generics.ListAPIView):
-    permission_classes = [IsChatbotCustomer]
+    permission_classes = [IsChatbotUser]
     serializer_class = MessageSerializer
     pagination_class = ChatbotPagination
     write_throttle_scope = 'chatbot'
@@ -128,7 +128,7 @@ class MessageListCreateView(WriteScopedThrottleMixin, generics.ListAPIView):
 @extend_schema_view(get=extend_schema(tags=['Chatbot - Customer'], summary='Trạng thái lượt trả lời sau lỗi mạng',
                                     responses=RunDetailSerializer))
 class RunDetailView(generics.GenericAPIView):
-    permission_classes = [IsChatbotCustomer]
+    permission_classes = [IsChatbotUser]
     serializer_class = RunSerializer
 
     def get(self, request, pk):

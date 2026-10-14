@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
+from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -241,6 +242,8 @@ def _validate_schedules(schedules):
         raise serializers.ValidationError({'schedules': 'Cần ít nhất 1 buổi làm việc.'})
 
     now = timezone.now()
+    open_t = settings.BOOKING_OPEN_TIME
+    last_t = settings.BOOKING_LAST_START_TIME
 
     for idx, schedule in enumerate(schedules, start=1):
         if schedule['scheduled_start'] <= now:
@@ -251,8 +254,12 @@ def _validate_schedules(schedules):
             raise serializers.ValidationError(
                 {'schedules': f'Buổi {idx}: giờ bắt đầu phải trước giờ kết thúc.'}
             )
-
-
+        local_start = timezone.localtime(schedule['scheduled_start']).time()
+        if not (open_t <= local_start <= last_t):
+            raise serializers.ValidationError(
+                {'schedules': f'Buổi {idx}: giờ bắt đầu phải trong khoảng '
+                              f'{open_t:%H:%M} đến {last_t:%H:%M}.'}
+            )
 def _validate_payment_method(payment_method, *, form_schema, sessions_count):
     allowed = {Payment.Method.CASH, Payment.Method.BANK_TRANSFER, Payment.Method.WALLET}
     if payment_method not in allowed:
