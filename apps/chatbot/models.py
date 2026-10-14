@@ -4,7 +4,7 @@ from django.db import models
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-
+from pgvector.django import VectorField
 
 class HelpArticle(models.Model):
     class Status(models.TextChoices):
@@ -120,3 +120,21 @@ class ChatbotRun(models.Model):
         # Separate attempts fence late writes from an expired worker. Conversation
         # context is rebuilt from committed transcript pairs, never from client input.
         return f'cleanwise-chatbot:{self.conversation_id}:{self.id}:{self.attempt_id}'
+
+
+
+class HelpChunk(models.Model):
+    article = models.ForeignKey(HelpArticle, on_delete=models.CASCADE, related_name='chunks')
+    section_index = models.PositiveIntegerField()
+    part_index = models.PositiveIntegerField(default=0)
+    heading = models.CharField(max_length=250, blank=True)
+    text = models.TextField()
+    content_hash = models.CharField(max_length=64)
+    embedding = VectorField(dimensions=768)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['article_id', 'section_index', 'part_index']
+        constraints = [
+            models.UniqueConstraint(fields=['article', 'section_index', 'part_index'], name='chatbot_chunk_unique'),
+        ]

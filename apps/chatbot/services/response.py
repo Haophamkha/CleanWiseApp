@@ -5,13 +5,22 @@ from .queries import booking_summary, local_time
 from .knowledge import published_articles
 
 
-def build_cards(customer_id, references):
+def build_cards(customer_id, references, role='CUSTOMER'):
     """Only tool artifacts can propose references. Recheck ownership/live state."""
     cards, seen = [], set()
     for reference in references:
         if not isinstance(reference, dict):
             continue
         kind, object_id = reference.get('type'), reference.get('id')
+
+        # Thẻ không gắn với bản ghi nào (nút mở màn chọn địa chỉ trên bản đồ).
+        if kind == 'address_map':
+            if ('address_map', 0) not in seen:
+                seen.add(('address_map', 0))
+                cards.append({'type': 'address_map', 'title': 'Thêm địa chỉ trên bản đồ',
+                              'action': 'OPEN_ADDRESS_MAP', 'label': 'Chọn trên bản đồ'})
+            continue
+
         if kind not in ('service', 'booking', 'schedule', 'help') or type(object_id) is not int or object_id <= 0:
             continue
         key = (kind, object_id)
@@ -29,7 +38,7 @@ def build_cards(customer_id, references):
                 cards.append({'type': kind, 'booking_id': obj.id, 'title': obj.booking_code,
                               'data': booking_summary(obj), 'action': 'OPEN_BOOKING', 'label': 'Xem đơn'})
         elif kind == 'help':
-            obj = published_articles().filter(pk=object_id).first()
+            obj = published_articles(role).filter(pk=object_id).first()
             if obj:
                 cards.append({'type': kind, 'article_id': obj.pk, 'title': obj.title,
                               'version': obj.version, 'effective_from': obj.effective_from.isoformat(),
