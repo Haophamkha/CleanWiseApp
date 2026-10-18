@@ -1,0 +1,47 @@
+x-backend: &backend
+  image: ghcr.io/${GHCR_OWNER}/cleanwise-be:latest
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/1
+    CELERY_EAGER: "0"
+  depends_on:
+    - redis
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: cleanwise-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.deploy.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - web
+
+  web:
+    <<: *backend
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
+    expose:
+      - "8000"
+
+  worker:
+    <<: *backend
+    command: celery -A core worker -B -l info --concurrency=1 -s /beat/celerybeat-schedule
+    volumes:
+      - beat_data:/beat
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 192mb --maxmemory-policy volatile-lru
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
+  beat_data:
