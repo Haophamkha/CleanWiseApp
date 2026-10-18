@@ -21,3 +21,6 @@ staticfiles/
 
 # Celery Beat
 celerybeat-schedule*
+
+# Isolated local previews
+.local/

@@ -1,6 +1,12 @@
 import logging
+import re
+import uuid
+from datetime import timedelta
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.core.exceptions import ObjectDoesNotExist
 from payos import WebhookError
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
@@ -9,10 +15,12 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
 from apps.common.permissions import IsCustomerRole, IsWorkerRole
+from apps.common.encryption import encrypt_value, decrypt_value
 
 from . import history_service, webhook_service
+from . import bankhub
 from .bank_catalog import get_bank_catalog
-from .models import UserPaymentMethod
+from .models import BankAccountVerification, UserPaymentMethod
 from .payment_method_service import set_default_payment_method, soft_delete_payment_method
 from .serializers import (
     BankPaymentMethodCreateSerializer,
@@ -54,6 +62,7 @@ class CustomerPaymentMethodListCreateView(PaymentWriteThrottleMixin, generics.Ge
         return context
 
     def get(self, request, *args, **kwargs):
+        bankhub.expire_stale_attempts(user=request.user, usage_type=self.usage_type)
         data = UserPaymentMethodSerializer(self.get_queryset(), many=True).data
         return Response({'message': 'Lấy danh sách phương thức thanh toán thành công.', 'data': data})
 
@@ -164,6 +173,150 @@ class WorkerPaymentMethodOptionsView(CustomerPaymentMethodOptionsView):
 
 class WorkerBankCatalogView(CustomerBankCatalogView):
     permission_classes = [IsWorkerRole]
+
+
+class PaymentMethodVerificationView(PaymentWriteThrottleMixin, generics.GenericAPIView):
+    """Start a TINGEE Sandbox bank-link request for a saved account."""
+    throttle_scope = 'payment'
+
+    def get_queryset(self):
+        return UserPaymentMethod.objects.filter(
+            user=self.request.user,
+            usage_type=self.usage_type,
+            method_type=UserPaymentMethod.MethodType.BANK_ACCOUNT,
+            is_active=True,
+        )
+
+    def post(self, request, *args, **kwargs):
+        method = get_object_or_404(self.get_queryset(), pk=self.kwargs['pk'])
+        if method.verification_status == UserPaymentMethod.VerificationStatus.VERIFIED:
+            return Response({'message': 'Tài khoản đã được xác minh.', 'data': {'status': 'VERIFIED'}})
+
+        previous = method.verification_attempts.order_by('-created_at').first()
+        identity = str(request.data.get('identity') or '').strip()
+        mobile = str(request.data.get('mobile') or request.user.phone_number or '').strip()
+        if not identity and previous and previous.identity_encrypted:
+            identity = decrypt_value(previous.identity_encrypted)
+        if not mobile and previous and previous.mobile_encrypted:
+            mobile = decrypt_value(previous.mobile_encrypted)
+        if not identity:
+            try:
+                identity = str(request.user.worker_profile.identity_number or '').strip()
+            except ObjectDoesNotExist:
+                identity = ''
+        if not identity or not mobile:
+            return Response({
+                'message': 'Cần nhập số CCCD/CMND và số điện thoại nhận OTP để xác minh Sandbox.',
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if not re.fullmatch(r'\d{9,14}', identity) or not re.fullmatch(r'0\d{9}', mobile):
+            return Response({
+                'message': 'Số CCCD/CMND hoặc số điện thoại không đúng định dạng.',
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            result = bankhub.create_verification(method=method, identity=identity, mobile=mobile)
+        except bankhub.BankHubError as exc:
+            return Response({'message': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        confirm_id = str(result.get('confirmId') or '')
+        authorize_url = result.get('authorizeLink') or result.get('deepLink') or ''
+        if authorize_url:
+            return Response({
+                'message': 'Ngân hàng yêu cầu xác thực qua ứng dụng hoặc webhook; luồng này chưa bật trong bản Sandbox CleanWise.',
+            }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        with transaction.atomic():
+            locked_method = UserPaymentMethod.objects.select_for_update().get(pk=method.pk)
+            for old_attempt in locked_method.verification_attempts.filter(status=BankAccountVerification.Status.PENDING):
+                old_attempt.status = BankAccountVerification.Status.EXPIRED
+                old_attempt.identity_encrypted = ''
+                old_attempt.mobile_encrypted = ''
+                old_attempt.save(update_fields=['status', 'identity_encrypted', 'mobile_encrypted', 'updated_at'])
+            attempt = BankAccountVerification.objects.create(
+                payment_method=locked_method,
+                link_token_xid=confirm_id or str(uuid.uuid4()),
+                expires_at=timezone.now() + timedelta(minutes=4) if confirm_id else None,
+                identity_encrypted=encrypt_value(identity),
+                mobile_encrypted=encrypt_value(mobile),
+            )
+            if confirm_id:
+                locked_method.verification_status = UserPaymentMethod.VerificationStatus.PENDING
+                locked_method.save(update_fields=['verification_status', 'updated_at'])
+            else:
+                bankhub._mark_sandbox_verified(attempt)
+        return Response({
+            'message': 'Đã bắt đầu xác minh tài khoản qua TINGEE Sandbox.',
+            'data': {
+                'status': 'PENDING' if confirm_id else 'SANDBOX_VERIFIED',
+                'requires_otp': bool(confirm_id),
+                'verification_id': attempt.pk,
+                'expires_at': attempt.expires_at,
+                'otp_method': result.get('otpMethod', ''),
+            },
+        }, status=status.HTTP_201_CREATED if confirm_id else status.HTTP_200_OK)
+
+
+class PaymentMethodVerificationConfirmView(PaymentWriteThrottleMixin, generics.GenericAPIView):
+    throttle_scope = 'payment'
+
+    def get_queryset(self):
+        return UserPaymentMethod.objects.filter(
+            user=self.request.user,
+            usage_type=self.usage_type,
+            method_type=UserPaymentMethod.MethodType.BANK_ACCOUNT,
+            is_active=True,
+        )
+
+    def post(self, request, *args, **kwargs):
+        method = get_object_or_404(self.get_queryset(), pk=self.kwargs['pk'])
+        otp = str(request.data.get('otp') or '').strip()
+        if not re.fullmatch(r'\d{4,8}', otp):
+            return Response({'message': 'Mã OTP phải gồm từ 4 đến 8 chữ số.'}, status=400)
+        attempt = method.verification_attempts.filter(
+            status=BankAccountVerification.Status.PENDING,
+        ).order_by('-created_at').first()
+        if not attempt:
+            return Response({'message': 'Không tìm thấy phiên xác minh đang chờ.'}, status=404)
+        if attempt.expires_at and attempt.expires_at <= timezone.now():
+            attempt.status = BankAccountVerification.Status.EXPIRED
+            attempt.identity_encrypted = ''
+            attempt.mobile_encrypted = ''
+            attempt.save(update_fields=['status', 'identity_encrypted', 'mobile_encrypted', 'updated_at'])
+            method.verification_status = UserPaymentMethod.VerificationStatus.UNVERIFIED
+            method.save(update_fields=['verification_status', 'updated_at'])
+            return Response({'message': 'Mã OTP đã hết hạn. Hãy bắt đầu xác minh lại.'}, status=400)
+        try:
+            bankhub.confirm_verification(method=method, confirm_id=attempt.link_token_xid, otp=otp)
+        except bankhub.BankHubError as exc:
+            return Response({'message': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            locked_attempt = BankAccountVerification.objects.select_for_update().get(pk=attempt.pk)
+            locked_method = UserPaymentMethod.objects.select_for_update().get(pk=method.pk)
+            bankhub._mark_sandbox_verified(locked_attempt)
+            locked_method.refresh_from_db(fields=['verification_status'])
+        return Response({
+            'message': 'Tài khoản đã được xác minh trong môi trường TINGEE Sandbox.',
+            'data': {'status': 'SANDBOX_VERIFIED'},
+        })
+
+
+class CustomerPaymentMethodVerificationView(PaymentMethodVerificationView):
+    permission_classes = [IsCustomerRole]
+    usage_type = UserPaymentMethod.UsageType.PAYMENT
+
+
+class WorkerPaymentMethodVerificationView(PaymentMethodVerificationView):
+    permission_classes = [IsWorkerRole]
+    usage_type = UserPaymentMethod.UsageType.PAYOUT
+
+
+class CustomerPaymentMethodVerificationConfirmView(PaymentMethodVerificationConfirmView):
+    permission_classes = [IsCustomerRole]
+    usage_type = UserPaymentMethod.UsageType.PAYMENT
+
+
+class WorkerPaymentMethodVerificationConfirmView(PaymentMethodVerificationConfirmView):
+    permission_classes = [IsWorkerRole]
+    usage_type = UserPaymentMethod.UsageType.PAYOUT
 
 
 class PayOSWebhookView(APIView):
