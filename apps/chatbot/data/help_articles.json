@@ -53,7 +53,7 @@
   },
   {
     "slug": "su-dung-app-khach-hang",
-    "version": 1,
+    "version": 3,
     "title": "Hướng dẫn sử dụng ứng dụng khách hàng CleanWise",
     "summary": "Tài liệu giúp khách hàng tìm đúng màn hình để quản lý địa chỉ, xem đơn, nhắn tin, kiểm tra giao dịch và dùng trợ lý. Các bước đặt đơn và thanh toán chi tiết có trong hai tài liệu hướng dẫn riêng.",
     "sections": [
@@ -91,7 +91,7 @@
       },
       {
         "heading": "Sử dụng Trợ lý",
-        "text": "Mở Trợ lý, nhập câu hỏi rõ ràng, ví dụ “Đơn gần nhất của tôi đã thanh toán chưa?” hoặc “Đơn này còn mấy buổi?”. Nếu có nhiều đơn phù hợp, cung cấp mã đơn để xác định đúng đơn. Nhấn thẻ dịch vụ, đơn hoặc buổi trong câu trả lời để mở màn hình chi tiết.\n\nTrợ lý hỗ trợ tra cứu; thao tác đặt đơn, hủy đơn hoặc gửi phản hồi được thực hiện tại màn hình tương ứng của ứng dụng. Khi cần trạng thái mới nhất, xem lại chi tiết đơn hoặc gửi câu hỏi tra cứu mới."
+        "text": "Mở Trợ lý, nhập câu hỏi rõ ràng, ví dụ “Đơn gần nhất của tôi đã thanh toán chưa?” hoặc “Đơn này còn mấy buổi?”. Nếu có nhiều đơn phù hợp, cung cấp mã đơn để xác định đúng đơn. Nhấn thẻ dịch vụ, đơn hoặc buổi trong câu trả lời để mở màn hình chi tiết.\n\nTrợ lý có thể tra cứu đơn, buổi, thanh toán và số dư ví; đặt lịch dịch vụ (kèm voucher và nhân viên yêu thích); hủy đơn hoặc hủy từng buổi; thêm địa chỉ mới (mở màn chọn vị trí trên bản đồ hoặc nhập chữ); lấy thông tin chuyển khoản cho đơn chuyển khoản đang chờ; đặt lại đơn cũ. Với thao tác đặt và hủy, Trợ lý luôn tóm tắt và hỏi xác nhận trước khi thực hiện.\n\nTrợ lý không sửa hoặc xóa địa chỉ, không nhận voucher mới, không thêm hoặc bớt nhân viên yêu thích, không nạp hoặc rút tiền ví, không gửi đánh giá và khiếu nại. Các thao tác này làm trực tiếp trong ứng dụng. Khi cần trạng thái mới nhất, xem lại chi tiết đơn hoặc gửi câu hỏi tra cứu mới."
       },
       {
         "heading": "Đánh giá và khiếu nại",
@@ -102,10 +102,10 @@
         "text": "Chọn Tất cả, bỏ từ khóa hoặc kiểm tra lại mã đơn. Xác nhận bạn đang đăng nhập đúng tài khoản đã đặt dịch vụ."
       }
     ],
-    "keywords": "sử dụng app địa chỉ tin nhắn voucher đánh giá khiếu nại trợ lý",
+    "keywords": "sử dụng app địa chỉ tin nhắn voucher đánh giá khiếu nại trợ lý chatbot",
     "source_document": "02_Huong_dan_su_dung_app_khach_hang.docx",
     "role": "CUSTOMER",
-    "effective_from": "2026-10-09"
+    "effective_from": "2026-10-13"
   },
   {
     "slug": "dat-don-dich-vu",
@@ -214,5 +214,181 @@
     "source_document": "04_Huong_dan_thanh_toan_va_vi_CleanWise.docx",
     "role": "CUSTOMER",
     "effective_from": "2026-10-09"
+  },
+  {
+    "slug": "huy-don-va-hoan-tien",
+    "version": 1,
+    "title": "Quy định hủy đơn, hủy buổi và hoàn tiền",
+    "summary": "Tài liệu mô tả điều kiện hủy đơn hoặc hủy từng buổi, nơi nhận tiền hoàn và thời hạn thanh toán đơn chuyển khoản.",
+    "sections": [
+      {
+        "heading": "Điều kiện hủy",
+        "text": "Đơn hoặc buổi đã thanh toán, hoặc đặt tiền mặt, chỉ hủy được khi chưa bắt đầu và còn cách giờ làm ít nhất 6 giờ. Đơn đang thực hiện không thể hủy. Gói nhiều buổi đã thanh toán được hủy từng buổi còn chờ thực hiện, không hủy cả gói một lần. Đơn chuyển khoản chưa thanh toán có thể hủy cả đơn và không bị giới hạn 6 giờ."
+      },
+      {
+        "heading": "Tiền hoàn",
+        "text": "Với đơn đã thanh toán, tiền hoàn được cộng vào Ví CleanWise. Hủy cả đơn một buổi thì hoàn phần còn lại của đơn; hủy một buổi trong gói nhiều buổi thì hoàn theo giá trị một buổi. Số tiền cụ thể hiển thị ở bước xác nhận hủy và trong lịch sử ví. Đơn chưa thanh toán thì không có khoản hoàn. Voucher của đơn được trả lại nếu chưa có buổi nào hoàn thành."
+      },
+      {
+        "heading": "Hạn thanh toán đơn chuyển khoản",
+        "text": "Đơn chuyển khoản chưa có hiệu lực cho đến khi thanh toán. Cần thanh toán trong vòng 30 phút kể từ lúc tạo đơn, quá hạn đơn tự hủy. Mỗi liên kết thanh toán có hiệu lực 5 phút; hết hạn thì lấy liên kết mới khi đơn còn hiệu lực. Nếu chuyển tiền sau khi đơn đã bị hủy, tiền được hoàn vào Ví CleanWise."
+      },
+      {
+        "heading": "Không hủy được thì làm gì",
+        "text": "Đọc lý do ứng dụng hoặc Trợ lý trả về, ví dụ đã quá hạn hủy trước giờ làm hoặc đơn đang thực hiện. Giữ mã đơn và thời điểm thao tác khi cần đối chiếu."
+      }
+    ],
+    "keywords": "hủy đơn hủy buổi hoàn tiền hạn thanh toán chuyển khoản hết hạn",
+    "source_document": "05_Quy_dinh_huy_don_va_hoan_tien.docx",
+    "role": "CUSTOMER",
+    "effective_from": "2026-10-13"
+  },
+  {
+    "slug": "quy-dinh-nhan-vien",
+    "version": 1,
+    "title": "Quy định dành cho nhân viên CleanWise",
+    "summary": "Tài liệu mô tả hoa hồng, quy tắc check-in và check-out, hủy buổi đã nhận và thời hạn khiếu nại buổi bị tự hủy. Số liệu cá nhân như thu nhập và số dư xem trong ứng dụng.",
+    "sections": [
+      {
+        "heading": "Hoa hồng",
+        "text": "CleanWise thu hoa hồng 10% trên giá của mỗi buổi làm. Giá này tính trước voucher, nên nhân viên không chịu phần giảm giá của khách. Thu nhập của bạn là phần còn lại sau khi trừ hoa hồng.\n\nĐơn thanh toán online: tiền được ghi nhận sau khi bạn check-out, vào ví sau thời gian giữ (mặc định 24 giờ). Nếu đơn có khiếu nại đang mở thì tiền chưa vào ví cho đến khi khiếu nại được xử lý.\n\nĐơn tiền mặt: bạn thu tiền từ khách. Hoa hồng 10% được giữ trừ vào ví ngay khi bạn nhận buổi, nên ví cần đủ số dư thì mới nhận được việc. Nếu bạn hủy nhận việc hoặc bị hệ thống tự gỡ, khoản giữ này được hoàn lại ví."
+      },
+      {
+        "heading": "Quy tắc check-in",
+        "text": "Check-in thực hiện trong ứng dụng trên điện thoại, cần bật GPS. Bạn phải ở trong bán kính 300 m quanh địa chỉ làm việc và tín hiệu GPS đủ chính xác.\n\nBạn chỉ check-in được trong khoảng từ 30 phút trước đến 30 phút sau giờ bắt đầu của buổi. Quá 30 phút sau giờ hẹn mà chưa check-in, hệ thống tự gỡ bạn khỏi buổi, đơn quay lại tìm nhân viên khác và hoa hồng giữ chỗ (nếu có) được hoàn."
+      },
+      {
+        "heading": "Check-out",
+        "text": "Check-out thực hiện tại đơn trong ứng dụng. Cần có ít nhất 1 ảnh trước khi làm và 1 ảnh sau khi làm (tối đa 5 ảnh mỗi loại), có thể thêm ghi chú hoàn thành. Cần check-out trong thời gian cho phép sau giờ kết thúc dự kiến, quá hạn hệ thống sẽ tự hoàn thành buổi.\n\nTrợ lý chat không check-in hoặc check-out thay bạn."
+      },
+      {
+        "heading": "Hủy buổi đã nhận",
+        "text": "Bạn chỉ tự hủy được buổi đã nhận khi buổi chưa bắt đầu và còn cách giờ làm ít nhất 6 giờ. Khi hủy cần nhập lý do. Khách hàng sẽ được báo và đơn tìm nhân viên khác.\n\nSát giờ làm (dưới 6 giờ) bạn không tự hủy được, hãy liên hệ quản trị viên để được hỗ trợ."
+      },
+      {
+        "heading": "Buổi bị hủy do không check-in nhưng bạn có đến làm",
+        "text": "Nếu hệ thống tự hủy buổi vì không ghi nhận check-in nhưng bạn thực tế đã đến làm, hãy gửi khiếu nại loại \"đã làm nhưng bị hệ thống tự hủy\" trong vòng 72 giờ kể từ giờ kết thúc dự kiến của buổi. Quá 72 giờ thì không khiếu nại được. Bạn có thể thêm ảnh bằng chứng trong mục khiếu nại của ứng dụng."
+      }
+    ],
+    "keywords": "quy định nhân viên hoa hồng 10% check-in 30 phút 300 m check-out hủy buổi 6 giờ khiếu nại tự hủy 72 giờ",
+    "source_document": "02_Quy_dinh_nhan_vien.docx",
+    "role": "WORKER",
+    "effective_from": "2026-10-14"
+  },
+  {
+    "slug": "su-dung-app-nhan-vien",
+    "version": 2,
+    "title": "Hướng dẫn sử dụng ứng dụng nhân viên CleanWise",
+    "summary": "Tài liệu giúp nhân viên làm việc với một buổi làm trong ứng dụng: bắt đầu, hoàn thành, liên hệ khách và hủy nhận việc. Quy tắc giờ giấc và hoa hồng xem trong tài liệu Quy định dành cho nhân viên.",
+    "sections": [
+      {
+        "heading": "Các tab chính",
+        "text": "Thanh dưới cùng có các tab Trang chủ, Công việc, Trợ lý, Tin nhắn và Cá nhân. Tab Công việc dùng để xem và nhận việc. Tab Tin nhắn chứa các hội thoại với khách. Tab Cá nhân mở màn hình Hồ sơ, nơi có thông tin cá nhân, các mục quản lý tài khoản và nút Đăng xuất."
+      },
+      {
+        "heading": "Bắt đầu một buổi làm",
+        "text": "Mở buổi làm đã nhận trong tab Công việc. Khi đến đúng khung giờ cho phép, nhấn Bắt đầu công việc để check-in. Nếu chưa đến giờ, ứng dụng hiện thông báo Chưa đến giờ bắt đầu kèm giờ có thể bắt đầu. Nếu đã quá hạn, ứng dụng hiện Đã quá giờ check-in và bạn cần liên hệ CleanWise để được hỗ trợ."
+      },
+      {
+        "heading": "Hoàn thành một buổi làm",
+        "text": "Khi buổi làm đang thực hiện, nhấn Hoàn thành công việc. Hộp thoại Hoàn thành buổi làm cho phép nhập ghi chú hoàn thành (không bắt buộc, tối đa 1000 ký tự). Nhấn Hoàn thành để xác nhận hoặc Để sau để quay lại."
+      },
+      {
+        "heading": "Liên hệ khách hàng",
+        "text": "Trong buổi làm đã nhận, nhấn Liên hệ khách hàng để mở hội thoại nhắn tin trực tiếp với khách. Các hội thoại cũng nằm trong tab Tin nhắn."
+      },
+      {
+        "heading": "Hủy nhận việc",
+        "text": "Với buổi chưa bắt đầu và còn đủ thời gian, nhấn HỦY NHẬN VIỆC trong chi tiết buổi làm. Chọn một lý do gợi ý hoặc nhập lý do khác, sau đó nhấn XÁC NHẬN HỦY. Bắt buộc phải có lý do. Nếu chỉ còn dưới 6 tiếng trước giờ làm, ứng dụng hiện Không thể tự hủy và bạn cần liên hệ quản trị viên."
+      },
+      {
+        "heading": "Nhận việc từ danh sách chung",
+        "text": "Với buổi đang mở cho mọi nhân viên, mở buổi đó rồi nhấn Nhận việc. Nếu buổi đã có người khác nhận, ứng dụng báo Đã có nhân viên khác nhận buổi này."
+      }
+    ],
+    "keywords": "sử dụng app nhân viên tab công việc bắt đầu công việc hoàn thành công việc check-in liên hệ khách hủy nhận việc",
+    "source_document": "03_Huong_dan_su_dung_app_nhan_vien.docx",
+    "role": "WORKER",
+    "effective_from": "2026-10-14"
+  },
+  {
+    "slug": "loi-moi-nhan-viec",
+    "version": 1,
+    "title": "Lời mời nhận việc và yêu cầu chỉ định từ khách",
+    "summary": "Tài liệu giải thích cách phản hồi lời mời nhận việc từ quản trị viên và yêu cầu khách chỉ định bạn, cùng thời hạn phản hồi.",
+    "sections": [
+      {
+        "heading": "Lời mời nhận việc từ quản trị viên",
+        "text": "Khi có lời mời, màn hình buổi làm hiện khung Lời mời nhận việc từ admin kèm người gửi, số buổi, hạn phản hồi và số phút còn lại. Nhấn Nhận việc hoặc Từ chối, rồi xác nhận trong hộp thoại. Người xác nhận đầu tiên sẽ nhận buổi làm. Nếu nhận thành công, buổi làm được thêm vào lịch của bạn."
+      },
+      {
+        "heading": "Khi lời mời hết hạn hoặc đã đóng",
+        "text": "Lời mời quá hạn hoặc đã đóng không còn chờ phản hồi. Nếu buổi làm vẫn đang mở, bạn có thể nhận từ danh sách chung bằng nút Nhận việc từ danh sách chung."
+      },
+      {
+        "heading": "Khách chỉ định bạn",
+        "text": "Khi khách chỉ định bạn, màn hình hiện khung Khách chỉ định bạn kèm số phút còn lại để nhận. Hết thời gian đó đơn mở cho tất cả nhân viên. Nếu không muốn nhận, nhấn Từ chối yêu cầu rồi xác nhận; đơn sẽ mở cho nhân viên khác và khách được thông báo."
+      },
+      {
+        "heading": "Khi nhận việc bị lỗi",
+        "text": "Đọc thông báo lỗi ứng dụng trả về. Lời mời có thể đã hết hạn, đã có người nhận hoặc ví chưa đủ số dư để giữ hoa hồng tiền mặt. Tải lại để kiểm tra trạng thái lời mời."
+      }
+    ],
+    "keywords": "lời mời nhận việc admin khách chỉ định từ chối yêu cầu nhận việc hết hạn",
+    "source_document": "04_Loi_moi_nhan_viec.docx",
+    "role": "WORKER",
+    "effective_from": "2026-10-14"
+  },
+  {
+    "slug": "thu-nhap-va-vi-nhan-vien",
+    "version": 1,
+    "title": "Thu nhập và ví của nhân viên",
+    "summary": "Tài liệu giải thích các thông tin hiển thị ở màn hình thu nhập và ví. Số liệu cụ thể của bạn luôn xem trong ứng dụng hoặc hỏi Trợ lý.",
+    "sections": [
+      {
+        "heading": "Thẻ Số dư ví",
+        "text": "Thẻ Số dư ví hiện số dư hiện tại và nút Rút tiền. Phía dưới có Hoa hồng tiền mặt chưa nộp và, khi có, khoản Đang chờ giải ngân. Khoản chờ giải ngân vào ví tối đa 24 giờ sau khi hoàn thành."
+      },
+      {
+        "heading": "Rút tiền",
+        "text": "Nhấn Rút tiền trên thẻ Số dư ví và làm theo các bước hiển thị trên màn hình. Mức giữ lại tối thiểu trong ví và hạn mức rút hiển thị ngay trong ứng dụng."
+      },
+      {
+        "heading": "Thống kê theo kỳ",
+        "text": "Chọn kỳ tuần hoặc tháng để xem thu nhập sau hoa hồng, số đơn hoàn thành và tổng giá trị đơn. Mục Đối soát với CleanWise cho biết phần đơn online (ứng dụng giữ tiền, vào ví sau tối đa 24 giờ) và phần đơn tiền mặt (bạn đã thu, hoa hồng đã trừ ví)."
+      },
+      {
+        "heading": "Lịch sử",
+        "text": "Mục Đơn đã hoàn thành liệt kê từng đơn trong kỳ, có nhãn Đang chờ giải ngân nếu tiền chưa vào ví. Mục Giao dịch ví gần đây liệt kê tiền vào và tiền ra của ví."
+      }
+    ],
+    "keywords": "thu nhập ví rút tiền số dư giải ngân hoa hồng tiền mặt đối soát",
+    "source_document": "05_Thu_nhap_va_vi_nhan_vien.docx",
+    "role": "WORKER",
+    "effective_from": "2026-10-14"
+  },
+  {
+    "slug": "khieu-nai-bao-su-co",
+    "version": 1,
+    "title": "Báo sự cố và khiếu nại",
+    "summary": "Tài liệu hướng dẫn gửi báo sự cố hoặc khiếu nại về một buổi làm, kể cả buổi bị hệ thống tự hủy.",
+    "sections": [
+      {
+        "heading": "Báo sự cố hoặc khiếu nại một buổi làm",
+        "text": "Trong chi tiết buổi làm đã nhận, mở biểu mẫu Báo sự cố / Khiếu nại. Chọn Loại sự cố, nhập Mô tả (không bắt buộc), thêm Ảnh minh chứng (tối đa 5 ảnh, chụp mới hoặc chọn từ thư viện) rồi nhấn GỬI KHIẾU NẠI. Sau khi gửi, ứng dụng hiện Đã gửi khiếu nại."
+      },
+      {
+        "heading": "Buổi bị hệ thống tự hủy",
+        "text": "Với buổi bị tự hủy do chưa check-in đúng hạn, biểu mẫu hiện tiêu đề Khiếu nại buổi bị tự hủy và chỉ có một loại sự cố, được chọn sẵn. Chỉ dùng khi bạn thực tế đã đến làm; hãy mô tả và đính kèm ảnh minh chứng. Thời hạn khiếu nại xem trong Quy định dành cho nhân viên."
+      },
+      {
+        "heading": "Trợ lý và ảnh minh chứng",
+        "text": "Trợ lý có thể gửi báo cáo sự cố thay bạn nhưng không nhận ảnh. Nếu cần thêm ảnh, dùng biểu mẫu trong buổi làm của ứng dụng."
+      }
+    ],
+    "keywords": "khiếu nại báo sự cố ảnh minh chứng buổi bị tự hủy gửi khiếu nại",
+    "source_document": "06_Khieu_nai_va_bao_su_co.docx",
+    "role": "WORKER",
+    "effective_from": "2026-10-14"
   }
 ]

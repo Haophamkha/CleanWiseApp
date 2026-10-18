@@ -23,13 +23,16 @@ class KnowledgeTests(APITransactionTestCase):
 
     def test_seed_is_repeatable_and_answers_real_topics_with_sources(self):
         call_command('import_chatbot_help', publish=True, verbosity=0)
-        self.assertEqual(HelpArticle.objects.count(), 4)
+        self.assertEqual(HelpArticle.objects.count(), 10)
+        self.assertEqual(HelpArticle.objects.filter(role='CUSTOMER').count(), 5)
+        self.assertEqual(HelpArticle.objects.filter(role='WORKER').count(), 5)
         for query in ['nạp tiền vào ví', 'nap tien vao vi', 'chuyển khoản VietQR', 'đặt đơn định kỳ', 'thêm địa chỉ']:
             with self.subTest(query=query):
                 data, refs = search_help(query)
                 self.assertTrue(data['results'])
                 self.assertTrue(refs)
-                self.assertTrue(all(item['version'] == 1 for item in data['results']))
+                self.assertTrue(all(item['version'] == HelpArticle.objects.get(pk=item['article_id']).version
+                                    for item in data['results']))
                 self.assertTrue(all(card['action'] == 'OPEN_HELP_ARTICLE' for card in build_cards(self.customer.pk, refs)))
         data, refs = search_help('chẩn đoán bệnh đau dạ dày')
         self.assertEqual(data['results'], [])
@@ -51,7 +54,7 @@ class KnowledgeTests(APITransactionTestCase):
         self.assertEqual(search_help('tuvungkiemthu')[0]['results'], [])
         response = self.client.get('/api/chatbot/help-articles/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 4)
+        self.assertEqual(len(response.data), 5)
 
     def test_revisions_retire_old_sources_and_do_not_resurrect(self):
         old = HelpArticle.objects.get(slug='thanh-toan-va-vi')
@@ -75,12 +78,15 @@ class KnowledgeTests(APITransactionTestCase):
         with self.assertRaises(ValidationError):
             article.save()
 
-    def test_api_requires_authenticated_customer(self):
+    def test_api_requires_authenticated_supported_role(self):
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get('/api/chatbot/help-articles/').status_code, 401)
         worker = get_user_model().objects.create_user(username='help-worker', email='worker@example.test', role='WORKER')
         self.client.force_authenticate(worker)
-        self.assertEqual(self.client.get('/api/chatbot/help-articles/').status_code, 403)
+        response = self.client.get('/api/chatbot/help-articles/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({row['id'] for row in response.data},
+                         set(HelpArticle.objects.filter(role='WORKER', status='PUBLISHED').values_list('id', flat=True)))
 
     def test_agent_tool_loop_keeps_sources_even_without_card_selection(self):
         model = ScriptedChatModel(replies=[

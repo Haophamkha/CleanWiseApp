@@ -20,9 +20,9 @@ from .assignment_service import OPEN_BOOKING_STATUSES
 from apps.wallets import earning_service
 import math
 
-CHECKIN_EARLY_MINUTES = getattr(settings, 'CHECKIN_EARLY_MINUTES', 60)
-CHECKIN_LATE_MINUTES = getattr(settings, 'CHECKIN_LATE_MINUTES', 60)
-CHECKOUT_GRACE_MINUTES = getattr(settings, 'CHECKOUT_GRACE_MINUTES', 60)
+CHECKIN_EARLY_MINUTES = getattr(settings, 'CHECKIN_EARLY_MINUTES', 30)
+CHECKIN_LATE_MINUTES = getattr(settings, 'CHECKIN_LATE_MINUTES', 30)
+CHECKOUT_GRACE_MINUTES = getattr(settings, 'CHECKOUT_GRACE_MINUTES', 30)
 
 CHECKIN_MAX_DISTANCE_METERS = getattr(settings, 'CHECKIN_MAX_DISTANCE_METERS', 300)
 # GPS sai số quá lớn thì không đủ tin cậy để so khoảng cách.

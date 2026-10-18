@@ -163,18 +163,26 @@ def send_message(customer, conversation_id, text, client_message_id):
         return run, True
     started = time.monotonic()
     try:
-        answer = run_agent(customer_id=customer.id, conversation_id=run.conversation_id,
-                           run_id=run.id, history=committed_history(run.conversation),
+        answer = run_agent(customer_id=customer.id, role=customer.role,
+                           conversation_id=run.conversation_id, run_id=str(run.id),
+                           history=committed_history(run.conversation),
                            text=text, thread_id=run.checkpoint_thread_id)
-        cards = build_cards(customer.id, answer.card_references)
+        refs = answer.card_references
+        if customer.role == 'WORKER':   # thẻ đơn/buổi của khách chưa dùng cho worker, chỉ giữ thẻ nguồn help
+            refs = [r for r in refs if r.get('type') == 'help']
+        cards = build_cards(customer.id, refs, role=customer.role)
         return _complete(run, answer, cards, int((time.monotonic() - started) * 1000)), False
     except ChatbotError:
         raise
     except Exception as exc:
         error_code = 'CHATBOT_NOT_CONFIGURED' if isinstance(exc, AgentUnavailable) else failure_code(exc)
         _fail(run, error_code, int((time.monotonic() - started) * 1000))
-        # Provider exception text can contain request content/credentials. Log only type and run ID.
-        logger.warning('Chatbot run %s failed (%s, %s)', run.id, type(exc).__name__, error_code)
+        # Provider exception text can contain request content/credentials. Log only type and run ID
+        # (ValueError là thông điệp do code nội bộ viết nên được phép in).
+        # MỚI: in traceback đầy đủ khi chạy DEBUG để tìm lỗi TypeError; prod vẫn không lộ nội dung.
+        logger.warning('Chatbot run %s failed (%s, %s)%s', run.id, type(exc).__name__, error_code,
+                       f': {exc}' if isinstance(exc, ValueError) else '',
+                       exc_info=settings.DEBUG)
         message = {
             'CHATBOT_NOT_CONFIGURED': 'Chatbot chưa được cấu hình đầy đủ. Vui lòng thử lại sau.',
             'CHATBOT_PROVIDER_BUSY': 'Dịch vụ AI đang tạm thời quá tải. Vui lòng thử lại sau ít phút.',

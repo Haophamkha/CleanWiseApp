@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from datetime import timedelta
+from datetime import time, timedelta
 from corsheaders.defaults import default_headers
 
 # Đường dẫn gốc tới thư mục project (nhảy lên 3 cấp từ core/settings/base.py)
@@ -254,11 +254,14 @@ CHATBOT_CHECKPOINT_DB_HOST = os.environ.get('CHATBOT_CHECKPOINT_DB_HOST', '')
 CHATBOT_GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY', '')
 CHATBOT_MODEL_TIMEOUT = int(os.environ.get('CHATBOT_MODEL_TIMEOUT', '20'))
 CHATBOT_RUN_TIMEOUT = int(os.environ.get('CHATBOT_RUN_TIMEOUT', '90'))
-CHATBOT_MAX_MODEL_CALLS = int(os.environ.get('CHATBOT_MAX_MODEL_CALLS', '6'))
-CHATBOT_MAX_TOOL_CALLS = int(os.environ.get('CHATBOT_MAX_TOOL_CALLS', '8'))
-CHATBOT_MAX_OUTPUT_TOKENS = int(os.environ.get('CHATBOT_MAX_OUTPUT_TOKENS', '2048'))
-CHATBOT_HISTORY_TURNS = int(os.environ.get('CHATBOT_HISTORY_TURNS', '6'))
-CHATBOT_HISTORY_CHARACTERS = int(os.environ.get('CHATBOT_HISTORY_CHARACTERS', '16000'))
+CHATBOT_MAX_MODEL_CALLS = int(os.environ.get('CHATBOT_MAX_MODEL_CALLS', '10'))
+CHATBOT_MAX_TOOL_CALLS = int(os.environ.get('CHATBOT_MAX_TOOL_CALLS', '12'))
+CHATBOT_MAX_OUTPUT_TOKENS = int(os.environ.get('CHATBOT_MAX_OUTPUT_TOKENS', '4096'))
+CHATBOT_HISTORY_TURNS = int(os.environ.get('CHATBOT_HISTORY_TURNS', '12'))
+CHATBOT_HISTORY_CHARACTERS = int(os.environ.get('CHATBOT_HISTORY_CHARACTERS', '24000'))
+CHATBOT_EMBED_MODEL = os.environ.get('CHATBOT_EMBED_MODEL', 'gemini-embedding-001')
+CHATBOT_EMBED_DIM = int(os.environ.get('CHATBOT_EMBED_DIM', '768'))
+CHATBOT_RAG_MAX_DISTANCE = float(os.environ.get('CHATBOT_RAG_MAX_DISTANCE', '0.40'))
 
 # ============================================= Cấu hình Simple JWT=============================================
 SIMPLE_JWT = {
@@ -414,3 +417,6 @@ WALLET_WITHDRAW_DAILY_MAX = int(os.environ.get("WALLET_WITHDRAW_DAILY_MAX", 5000
 # Tài khoản ngân hàng mới thêm phải chờ bao lâu mới được rút về (test: đặt 0)
 PAYOUT_METHOD_COOLDOWN_HOURS = int(os.environ.get("PAYOUT_METHOD_COOLDOWN_HOURS", 24))
 
+# Khung giờ nhận lịch: giờ BẮT ĐẦU phải nằm trong khoảng này
+BOOKING_OPEN_TIME = time(8, 0)
+BOOKING_LAST_START_TIME = time(18, 0)
