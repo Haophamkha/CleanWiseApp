@@ -29,6 +29,11 @@ PAYOUT_MODE = os.environ.get("PAYOUT_MODE", "mock")
 TOPUP_MODE = os.environ.get("TOPUP_MODE", "mock")
 PAYOUT_ALLOW_MOCK = os.environ.get("PAYOUT_ALLOW_MOCK") == "1"
 
+# TINGEE Bank Link UAT; production credentials are intentionally not configured here.
+TINGEE_BASE_URL = os.environ.get('TINGEE_BASE_URL', 'https://uat-open-api.tingee.vn')
+TINGEE_CLIENT_ID = os.environ.get('TINGEE_CLIENT_ID', '')
+TINGEE_SECRET_TOKEN = os.environ.get('TINGEE_SECRET_TOKEN', '')
+
 PAYOS_PAYOUT_CLIENT_ID = os.environ.get("PAYOS_PAYOUT_CLIENT_ID", "")
 PAYOS_PAYOUT_API_KEY = os.environ.get("PAYOS_PAYOUT_API_KEY", "")
 PAYOS_PAYOUT_CHECKSUM_KEY = os.environ.get("PAYOS_PAYOUT_CHECKSUM_KEY", "")

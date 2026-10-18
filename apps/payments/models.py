@@ -61,6 +61,7 @@ class UserPaymentMethod(models.Model):
         UNVERIFIED = 'UNVERIFIED', 'Chưa xác minh'
         PENDING = 'PENDING', 'Đang xác minh'
         VERIFIED = 'VERIFIED', 'Đã xác minh'
+        SANDBOX_VERIFIED = 'SANDBOX_VERIFIED', 'Đã xác minh Sandbox'
         FAILED = 'FAILED', 'Xác minh thất bại'
         DISCONNECTED = 'DISCONNECTED', 'Đã ngắt liên kết'
 
@@ -114,3 +115,30 @@ class UserPaymentMethod(models.Model):
 
     def __str__(self):
         return f'{self.user} - {self.get_method_type_display()}'
+
+
+class BankAccountVerification(models.Model):
+    """One bank-link attempt; provider confirmation inputs are encrypted at rest."""
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Đang xác minh'
+        VERIFIED = 'VERIFIED', 'Đã xác minh'
+        FAILED = 'FAILED', 'Xác minh thất bại'
+        EXPIRED = 'EXPIRED', 'Đã hết hạn'
+
+    payment_method = models.ForeignKey(
+        UserPaymentMethod, on_delete=models.CASCADE, related_name='verification_attempts',
+    )
+    link_token_xid = models.CharField(max_length=64, unique=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    provider_event_xid = models.CharField(max_length=64, blank=True, default='')
+    identity_encrypted = models.TextField(blank=True, default='')
+    mobile_encrypted = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'bank_account_verifications'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['payment_method', 'status'], name='bank_verify_method_idx')]

@@ -69,6 +69,10 @@ def _get_payout_method(user, method_id):
         raise serializers.ValidationError({
             'payment_method_id': 'Tài khoản ngân hàng thiếu thông tin, vui lòng thêm lại.',
         })
+    if method.verification_status != UserPaymentMethod.VerificationStatus.VERIFIED:
+        raise serializers.ValidationError({
+            'payment_method_id': 'Vui lòng xác minh tài khoản ngân hàng trước khi rút tiền.',
+        })
 
     # Chống kẻ chiếm tài khoản thêm STK của hắn rồi rút sạch ví ngay.
     cooldown_hours = int(getattr(settings, 'PAYOUT_METHOD_COOLDOWN_HOURS', 24))

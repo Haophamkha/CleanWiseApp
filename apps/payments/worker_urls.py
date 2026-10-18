@@ -6,6 +6,8 @@ from .views import (
     WorkerPaymentMethodListCreateView,
     WorkerPaymentMethodOptionsView,
     WorkerPaymentMethodSetDefaultView,
+    WorkerPaymentMethodVerificationView,
+    WorkerPaymentMethodVerificationConfirmView,
 )
 
 
@@ -15,4 +17,6 @@ urlpatterns = [
     path('payment-methods/banks/', WorkerBankCatalogView.as_view(), name='worker-payment-method-banks'),
     path('payment-methods/<int:pk>/', WorkerPaymentMethodDetailView.as_view(), name='worker-payment-method-detail'),
     path('payment-methods/<int:pk>/default/', WorkerPaymentMethodSetDefaultView.as_view(), name='worker-payment-method-set-default'),
+    path('payment-methods/<int:pk>/verification/', WorkerPaymentMethodVerificationView.as_view(), name='worker-payment-method-verification'),
+    path('payment-methods/<int:pk>/verification/confirm/', WorkerPaymentMethodVerificationConfirmView.as_view(), name='worker-payment-method-verification-confirm'),
 ]
