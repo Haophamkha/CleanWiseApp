@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.db import transaction
 from django.core.exceptions import ValidationError
@@ -120,3 +121,31 @@ class ChatbotRun(models.Model):
         # Separate attempts fence late writes from an expired worker. Conversation
         # context is rebuilt from committed transcript pairs, never from client input.
         return f'cleanwise-chatbot:{self.conversation_id}:{self.id}:{self.attempt_id}'
+
+
+class ChatbotBookingDraft(models.Model):
+    """Server-owned quote awaiting an explicit customer confirmation."""
+    class Status(models.TextChoices):
+        AWAITING_CONFIRMATION = 'AWAITING_CONFIRMATION', 'Chờ xác nhận'
+        CONFIRMED = 'CONFIRMED', 'Đã tạo đơn'
+        CANCELLED = 'CANCELLED', 'Đã hủy nháp'
+        EXPIRED = 'EXPIRED', 'Hết hạn'
+
+    conversation = models.OneToOneField('ai_engine.ChatbotSession', on_delete=models.CASCADE,
+                                         related_name='booking_draft')
+    customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chatbot_booking_drafts')
+    service = models.ForeignKey('services.Service', on_delete=models.PROTECT)
+    address = models.ForeignKey('addresses.CustomerAddress', on_delete=models.PROTECT)
+    delivery_address = models.ForeignKey('addresses.CustomerAddress', null=True, blank=True,
+                                         on_delete=models.PROTECT, related_name='chatbot_delivery_drafts')
+    preferred_worker_id = models.PositiveBigIntegerField(null=True, blank=True)
+    service_data = models.JSONField(default=dict)
+    voucher_code = models.CharField(max_length=80, blank=True)
+    payment_method = models.CharField(max_length=30)
+    quote = models.JSONField(default=dict)
+    prepared_run_id = models.UUIDField()
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.AWAITING_CONFIRMATION)
+    booking = models.ForeignKey('bookings.Booking', null=True, blank=True, on_delete=models.SET_NULL)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

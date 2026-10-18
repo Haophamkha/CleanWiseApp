@@ -163,7 +163,8 @@ def send_message(customer, conversation_id, text, client_message_id):
         return run, True
     started = time.monotonic()
     try:
-        answer = run_agent(customer_id=customer.id, history=committed_history(run.conversation),
+        answer = run_agent(customer_id=customer.id, conversation_id=run.conversation_id,
+                           run_id=run.id, history=committed_history(run.conversation),
                            text=text, thread_id=run.checkpoint_thread_id)
         cards = build_cards(customer.id, answer.card_references)
         return _complete(run, answer, cards, int((time.monotonic() - started) * 1000)), False

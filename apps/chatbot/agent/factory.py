@@ -1,4 +1,5 @@
 import json
+import re
 import time
 
 from django.conf import settings
@@ -15,6 +16,8 @@ from .prompts import SYSTEM_PROMPT
 from .schemas import AgentAnswer, AgentContext
 from .tools import CUSTOMER_TOOLS
 from ..exceptions import AgentUnavailable
+from ..services import queries
+from ..services.queries import normalized
 
 
 @before_model
@@ -33,6 +36,114 @@ def enforce_model_budget(request, handler):
         **request.model_settings,
         'timeout': min(settings.CHATBOT_MODEL_TIMEOUT, remaining),
     }))
+
+
+def strip_internal_reference_payload(text):
+    """Remove model-emitted card-selection JSON from customer-visible text."""
+    decoder = json.JSONDecoder()
+    spans = []
+    cursor = 0
+    while True:
+        start = text.find('{', cursor)
+        if start < 0:
+            break
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            cursor = start + 1
+            continue
+        references = value.get('references') if isinstance(value, dict) else None
+        if (isinstance(references, list)
+                and all(isinstance(ref, dict) and ref.get('type') in ('service', 'booking', 'schedule', 'help')
+                        and type(ref.get('id')) is int for ref in references)):
+            # JSONDecoder.raw_decode returns an absolute end offset into text.
+            spans.append((start, end))
+            cursor = end
+        else:
+            cursor = start + 1
+    for start, end in reversed(spans):
+        text = text[:start] + '\n' + text[end:]
+    text = '\n'.join(line.rstrip() for line in text.splitlines()).strip()
+    return re.sub(r'\n{3,}', '\n\n', text)
+
+
+def service_name_is_mentioned(name, answer):
+    """Match service names despite punctuation and harmless wording changes."""
+    name_tokens = set(re.findall(r'\w+', normalized(name)))
+    answer_tokens = set(re.findall(r'\w+', normalized(answer)))
+    return bool(name_tokens) and name_tokens.issubset(answer_tokens)
+
+
+def generic_booking_service_choices(text, history=()):
+    """Present the catalog for broad service questions or unspecified booking requests."""
+    normalized_text = normalized(text)
+    booking_intent = any(phrase in normalized_text for phrase in (
+        'dat lich', 'dat dich vu', 'muon dat', 'can dat', 'muon su dung dich vu',
+    ))
+    catalog_intent = any(phrase in normalized_text for phrase in (
+        'nhung dich vu nao', 'danh sach dich vu', 'liet ke dich vu',
+        'cac dich vu', 'dich vu nao', 'dich vu gi', 'co dich vu gi',
+    ))
+    if not booking_intent and not catalog_intent:
+        return None
+
+    pages = []
+    page = 1
+    while len(pages) < 10:
+        services = queries.search_services('', page=page)
+        pages.extend(services['results'])
+        if not services['has_next'] or not services['results']:
+            break
+        page += 1
+    if booking_intent and not catalog_intent:
+        recent_context = ' '.join([text] + [part for pair in history[-3:] for part in pair])
+        if any(service_name_is_mentioned(item['name'], recent_context) for item in pages):
+            return None
+
+    names = [item['name'] for item in pages]
+    if not names:
+        return AgentAnswer(
+            text='Hiện mình chưa tìm thấy dịch vụ đang hoạt động. Bạn thử lại sau nhé.',
+            usage={'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
+                   'model_calls': 0, 'tool_calls': 0},
+        )
+    greeting = 'Chào bạn! ' if not history else ''
+    text = (greeting + 'CleanWise hiện có 2 hình thức dịch vụ:\n'
+            'Gói lẻ: Phù hợp khi bạn cần đặt dịch vụ một lần theo nhu cầu cụ thể.\n'
+            'Gói tháng: Phù hợp khi bạn muốn sử dụng định kỳ theo lịch và số buổi đã chọn; '
+            'chỉ áp dụng cho dịch vụ có hỗ trợ đăng ký định kỳ.\n\n'
+            'Các dịch vụ đang hoạt động: ' + '; '.join(names) + '.')
+    if services['has_next']:
+        text += ' Danh sách còn dịch vụ khác; bạn có thể yêu cầu xem thêm.'
+    text += '\n\n' + ('Bạn muốn đặt dịch vụ nào? Hãy chọn một thẻ bên dưới để xem chi tiết.'
+                       if booking_intent else 'Bạn có thể chọn một thẻ bên dưới để xem chi tiết dịch vụ.')
+    return AgentAnswer(
+        text=text,
+        card_references=[{'type': 'service', 'id': item['id']} for item in pages],
+        usage={'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
+               'model_calls': 0, 'tool_calls': 0},
+    )
+
+
+def address_management_answer(text, history=()):
+    """Give concrete customer-app steps for managing saved addresses."""
+    normalized_text = normalized(text)
+    address_intent = ('dia chi' in normalized_text and any(verb in normalized_text.split()
+                     for verb in ('them', 'tao', 'luu', 'cap', 'sua', 'chinh')))
+    if not address_intent:
+        return None
+    greeting = 'Chào bạn! ' if not history else ''
+    answer = (
+        greeting + 'Bạn có thể thêm địa chỉ mới trong app CleanWise theo các bước sau:\n'
+        '1. Vào Cá nhân > Địa chỉ của tôi > Thêm địa chỉ.\n'
+        '2. Chọn Chọn trên bản đồ hoặc Nhập thủ công.\n'
+        '3. Điền nhãn địa chỉ, tên và số điện thoại người nhận cùng địa chỉ cụ thể, rồi nhấn Thêm địa chỉ để lưu.\n'
+        'Với dịch vụ chuyển nhà, hãy lưu riêng địa chỉ chuyển đi và địa chỉ chuyển đến. Sau đó quay lại trang dịch vụ và chọn đúng địa chỉ ở từng mục.'
+    )
+    return AgentAnswer(text=answer, usage={
+        'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
+        'model_calls': 0, 'tool_calls': 0,
+    })
 
 
 def create_customer_agent(model, checkpointer):
@@ -65,9 +176,13 @@ def extract_answer(result):
                             if isinstance(block, dict) and block.get('type') == 'text')
     if not isinstance(content, str) or not content.strip() or len(content) > 12000:
         raise ValueError('Agent returned invalid content')
+    content = strip_internal_reference_payload(content)
+    if not content:
+        content = 'Bạn vui lòng cho biết rõ dịch vụ muốn xem hoặc đặt lịch nhé.'
     candidates = {}
     detail_references = []
     mentioned_references = []
+    mentioned_service_references = []
     selected_references = None
     source_references = []
     usage = {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0, 'model_calls': 0, 'tool_calls': 0}
@@ -99,6 +214,19 @@ def extract_answer(result):
                                 mentioned_references.append({'type': 'booking', 'id': item['id']})
                     except (ValueError, TypeError, AttributeError):
                         pass
+                if message.name == 'search_services':
+                    try:
+                        data = json.loads(message.content)
+                        for item in data.get('results', []):
+                            name = item.get('name')
+                            ref = {'type': 'service', 'id': item.get('id')}
+                            if (isinstance(name, str) and name.strip()
+                                    and service_name_is_mentioned(name, content)
+                                    and candidates.get(('service', ref['id'])) == ref
+                                    and ref not in mentioned_service_references):
+                                mentioned_service_references.append(ref)
+                    except (ValueError, TypeError, AttributeError):
+                        pass
                 if message.name == 'select_response_cards' and 'selected_cards' in artifact:
                     # The model can only select entities actually read in this turn.
                     selected_references = []
@@ -109,11 +237,20 @@ def extract_answer(result):
                         if key in candidates and candidates[key] not in selected_references:
                             selected_references.append(candidates[key])
     if selected_references is not None:
-        references = selected_references
+        # A service card must be named in the natural-language answer. When the
+        # reply offers several named services, show those choices instead of
+        # trusting a potentially arbitrary single model selection.
+        named_services = {('service', ref['id']) for ref in mentioned_service_references}
+        references = [
+            ref for ref in selected_references
+            if ref.get('type') != 'service' or ('service', ref['id']) in named_services
+        ]
+        if mentioned_service_references:
+            references.extend(ref for ref in mentioned_service_references if ref not in references)
     else:
         # Fail conservatively when the model omits selection: never expose an
         # entire discovery list beside an answer about a single order.
-        references = mentioned_references or detail_references
+        references = mentioned_references or mentioned_service_references or detail_references
         if not references and len(candidates) == 1:
             references = list(candidates.values())
     # Always preserve retrieved source provenance, even if the model omits card selection.
@@ -121,9 +258,15 @@ def extract_answer(result):
     return AgentAnswer(text=content.strip(), card_references=references[:5], usage=usage)
 
 
-def run_agent(*, customer_id, history, text, thread_id):
+def run_agent(*, customer_id, conversation_id, run_id, history, text, thread_id):
     if not settings.CHATBOT_ENABLED or not settings.CHATBOT_GOOGLE_API_KEY:
         raise AgentUnavailable('Gemini key is not configured or chatbot is disabled.')
+    address_answer = address_management_answer(text, history)
+    if address_answer is not None:
+        return address_answer
+    service_choices = generic_booking_service_choices(text, history)
+    if service_choices is not None:
+        return service_choices
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     model = ChatGoogleGenerativeAI(
@@ -135,7 +278,9 @@ def run_agent(*, customer_id, history, text, thread_id):
     for user_text, assistant_text in history:
         messages.extend([HumanMessage(content=user_text), AIMessage(content=assistant_text)])
     messages.append(HumanMessage(content=text))
-    context = AgentContext(customer_id=customer_id, deadline=time.monotonic() + settings.CHATBOT_RUN_TIMEOUT)
+    context = AgentContext(customer_id=customer_id, conversation_id=conversation_id,
+                           run_id=str(run_id), user_text=text,
+                           deadline=time.monotonic() + settings.CHATBOT_RUN_TIMEOUT)
     with open_checkpointer() as saver:
         agent = create_customer_agent(model, saver)
         result = agent.invoke(

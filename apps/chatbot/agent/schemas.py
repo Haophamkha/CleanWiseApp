@@ -53,6 +53,27 @@ class SearchHelpInput(BaseModel):
     query: str = Field(min_length=2, max_length=250, description='Từ khóa chủ đề đầy đủ, dựa vào câu hỏi tiếp nối; ví dụ nạp tiền vào ví, đặt đơn định kỳ.')
 
 
+class PrepareBookingInput(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+    service_id: int = Field(gt=0)
+    address_id: int = Field(gt=0)
+    delivery_address_id: int | None = Field(default=None, gt=0)
+    preferred_worker_id: int | None = Field(default=None, gt=0)
+    service_data: dict = Field(description='Giá trị form_schema.fields khách đã cung cấp; không tự điền trường còn thiếu.')
+    payment_method: Literal['CASH', 'BANK_TRANSFER', 'WALLET']
+    voucher_code: str = Field(default='', max_length=80)
+
+
+class EmptyInput(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+
+class RuntimeOnlyInput(BaseModel):
+    """A harmless field lets LangChain inject ToolRuntime for zero-data tools."""
+    model_config = ConfigDict(extra='ignore')
+    acknowledge: bool = Field(default=True, description='Không cần cung cấp thông tin bổ sung.')
+
+
 class BookingSchedulesInput(BookingDetailsInput):
     page: int = Field(default=1, ge=1, le=10000)
 
@@ -61,6 +82,9 @@ class BookingSchedulesInput(BookingDetailsInput):
 class AgentContext:
     customer_id: int
     deadline: float
+    conversation_id: int = 0
+    run_id: str = ''
+    user_text: str = ''
 
 
 @dataclass
