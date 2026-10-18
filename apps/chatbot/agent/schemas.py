@@ -53,6 +53,27 @@ class SearchHelpInput(BaseModel):
     query: str = Field(min_length=2, max_length=250, description='Từ khóa chủ đề đầy đủ, dựa vào câu hỏi tiếp nối; ví dụ nạp tiền vào ví, đặt đơn định kỳ.')
 
 
+class PrepareBookingDraftInput(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+    service_id: int = Field(gt=0)
+    address_id: int = Field(gt=0)
+    delivery_address_id: int | None = Field(default=None, gt=0)
+    preferred_worker_id: int | None = Field(default=None, gt=0)
+    service_data: dict = Field(description='Giá trị form_schema.fields khách đã cung cấp; không tự điền trường còn thiếu.')
+    payment_method: Literal['CASH', 'BANK_TRANSFER', 'WALLET']
+    voucher_code: str = Field(default='', max_length=80)
+
+
+class EmptyInput(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+
+class RuntimeOnlyInput(BaseModel):
+    """A harmless field lets LangChain inject ToolRuntime for zero-data tools."""
+    model_config = ConfigDict(extra='ignore')
+    acknowledge: bool = Field(default=True, description='Không cần cung cấp thông tin bổ sung.')
+
+
 class BookingSchedulesInput(BookingDetailsInput):
     page: int = Field(default=1, ge=1, le=10000)
 
@@ -98,9 +119,12 @@ class ConfirmBookingInput(BaseModel):
 
 @dataclass(frozen=True)
 class AgentContext:
+    customer_id: int | None
     deadline: float
+    conversation_id: int = 0
+    run_id: str = ''
+    user_text: str = ''
     thread_id: str = ''
-    customer_id: int | None = None
     worker_id: int | None = None
     role: str = 'CUSTOMER'
 
@@ -110,8 +134,8 @@ class AgentAnswer:
     text: str
     card_references: list[dict] = field(default_factory=list)
     usage: dict = field(default_factory=dict)
-    
-    
+
+
 class SearchWardsInput(BaseModel):
     model_config = ConfigDict(extra='ignore')
     ward_name: str = Field(min_length=1, max_length=100, description='Tên phường/xã khách nói, ví dụ "Bến Nghé"')
@@ -126,8 +150,8 @@ class PrepareAddressInput(BaseModel):
     address_line: str = Field(min_length=3, max_length=300, description='Số nhà, tên đường khách nói')
     ward_code: str = Field(min_length=1, max_length=10, description='ward_code lấy từ search_wards trong lượt này')
     label: str = Field(default='', max_length=100, description='Tên gợi nhớ (Nhà, Công ty...); bỏ trống nếu khách không nói')
-    
-    
+
+
 
 
 class WorkerScheduleInput(BaseModel):
@@ -159,19 +183,17 @@ class PrepareComplaintInput(BaseModel):
     booking_reference: str = Field(min_length=1, max_length=30, description='Mã đơn (CW-...).')
     schedule_no: int | None = Field(default=None, ge=1, description='Số thứ tự buổi; bỏ trống nếu đơn chỉ có 1 buổi của nhân viên.')
     issue_type_id: int = Field(gt=0, description='id từ list_complaint_issue_types trong lượt này.')
-    content: str = Field(min_length=5, max_length=1000, description='Nội dung nhân viên tự mô tả.') 
-    
-    
+    content: str = Field(min_length=5, max_length=1000, description='Nội dung nhân viên tự mô tả.')
+
+
 class PreferredResponseInput(BaseModel):
     model_config = ConfigDict(extra='ignore')
     booking_reference: str = Field(min_length=1, max_length=30, description='Mã đơn (CW-...) lấy từ customer_requests của list_pending_invitations.')
     action: Literal['ACCEPT', 'REJECT'] = Field(description='ACCEPT = nhận, REJECT = từ chối.')
-    
+
 
 class CheckOutInput(BaseModel):
     model_config = ConfigDict(extra='ignore')
     booking_reference: str = Field(min_length=1, max_length=30, description='Mã đơn (CW-...).')
     schedule_no: int | None = Field(default=None, ge=1, description='Số thứ tự buổi; bỏ trống nếu chỉ có 1 buổi đang làm.')
     completion_note: str = Field(default='', max_length=500, description='Ghi chú hoàn thành do nhân viên tự nói; để trống nếu không có.')
-    
-

@@ -163,7 +163,8 @@ def send_message(customer, conversation_id, text, client_message_id):
         return run, True
     started = time.monotonic()
     try:
-        answer = run_agent(user_id=customer.id, role=customer.role,
+        answer = run_agent(customer_id=customer.id, role=customer.role,
+                           conversation_id=run.conversation_id, run_id=str(run.id),
                            history=committed_history(run.conversation),
                            text=text, thread_id=run.checkpoint_thread_id)
         refs = answer.card_references

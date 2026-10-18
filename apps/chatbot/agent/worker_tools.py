@@ -2,7 +2,7 @@ from langchain.tools import ToolRuntime, tool
 
 from .schemas import (AgentContext, EarningHistoryInput, EarningsInput, InvitationResponseInput,
                       PrepareComplaintInput, PreferredResponseInput, SearchHelpInput, WalletHistoryInput,
-                      WorkerScheduleInput)
+                      WorkerScheduleInput, RuntimeOnlyInput)
 from .tools import result
 from ..services import queries, worker_tool
 from ..services.knowledge import search_help
@@ -31,8 +31,8 @@ def get_my_schedule(runtime: ToolRuntime[AgentContext], status: str | None = Non
     return result(lambda: (worker_tool.get_my_schedule(_wid(runtime), status, date_from, date_to, page), []), runtime)
 
 
-@tool(response_format='content_and_artifact')
-def list_pending_invitations(runtime: ToolRuntime[AgentContext]):
+@tool(args_schema=RuntimeOnlyInput, response_format='content_and_artifact')
+def list_pending_invitations(runtime: ToolRuntime[AgentContext], acknowledge: bool = True):
     """Liệt kê lời mời nhận việc đang chờ phản hồi (invitation_id, giờ, khu vực, hạn trả lời, thu nhập dự kiến) và yêu cầu đích danh từ khách. Gọi trước khi nhận/từ chối."""
     return result(lambda: (worker_tool.list_pending_invitations(_wid(runtime)), []), runtime)
 
@@ -44,8 +44,8 @@ def prepare_invitation_response(invitation_id: int, action: str, runtime: ToolRu
         _wid(runtime), runtime.context.thread_id, invitation_id, action), []), runtime)
 
 
-@tool(response_format='content_and_artifact')
-def confirm_invitation_response(runtime: ToolRuntime[AgentContext]):
+@tool(args_schema=RuntimeOnlyInput, response_format='content_and_artifact')
+def confirm_invitation_response(runtime: ToolRuntime[AgentContext], acknowledge: bool = True):
     """Thực hiện nhận/từ chối lời mời từ bản nháp gần nhất. CHỈ gọi sau khi nhân viên đã đồng ý rõ ràng ở tin nhắn mới nhất."""
     return result(lambda: (worker_tool.confirm_invitation_response(
         _wid(runtime), runtime.context.thread_id), []), runtime)
@@ -58,8 +58,8 @@ def prepare_preferred_response(booking_reference: str, action: str, runtime: Too
         _wid(runtime), runtime.context.thread_id, booking_reference, action), []), runtime)
 
 
-@tool(response_format='content_and_artifact')
-def confirm_preferred_response(runtime: ToolRuntime[AgentContext]):
+@tool(args_schema=RuntimeOnlyInput, response_format='content_and_artifact')
+def confirm_preferred_response(runtime: ToolRuntime[AgentContext], acknowledge: bool = True):
     """Thực hiện nhận/từ chối yêu cầu đích danh từ bản nháp gần nhất. CHỈ gọi sau khi nhân viên đã đồng ý rõ ràng ở tin nhắn mới nhất."""
     return result(lambda: (worker_tool.confirm_preferred_response(_wid(runtime), runtime.context.thread_id), []), runtime)
 
@@ -82,14 +82,14 @@ def get_worker_wallet(runtime: ToolRuntime[AgentContext], page: int = 1):
     return result(lambda: (worker_tool.get_worker_wallet(_wid(runtime), page), []), runtime)
 
 
-@tool(response_format='content_and_artifact')
-def get_my_reviews(runtime: ToolRuntime[AgentContext]):
+@tool(args_schema=RuntimeOnlyInput, response_format='content_and_artifact')
+def get_my_reviews(runtime: ToolRuntime[AgentContext], acknowledge: bool = True):
     """Điểm đánh giá trung bình, phân bố sao và 5 đánh giá gần nhất của nhân viên."""
     return result(lambda: (worker_tool.get_my_reviews(_wid(runtime)), []), runtime)
 
 
-@tool(response_format='content_and_artifact')
-def get_my_profile_status(runtime: ToolRuntime[AgentContext]):
+@tool(args_schema=RuntimeOnlyInput, response_format='content_and_artifact')
+def get_my_profile_status(runtime: ToolRuntime[AgentContext], acknowledge: bool = True):
     """Họ tên, trạng thái duyệt hồ sơ, lý do bị từ chối, mức hoàn thiện hồ sơ, khu vực làm việc, dịch vụ đã đăng ký, điểm đánh giá và số buổi đã hoàn thành. Khi nhân viên xem hồ sơ, nêu cả họ tên."""
     return result(lambda: (worker_tool.get_my_profile(_wid(runtime)), []), runtime)
 
@@ -100,8 +100,8 @@ def list_my_complaints(runtime: ToolRuntime[AgentContext], page: int = 1):
     return result(lambda: (worker_tool.list_my_complaints(_wid(runtime), page), []), runtime)
 
 
-@tool(response_format='content_and_artifact')
-def list_complaint_issue_types(runtime: ToolRuntime[AgentContext]):
+@tool(args_schema=RuntimeOnlyInput, response_format='content_and_artifact')
+def list_complaint_issue_types(runtime: ToolRuntime[AgentContext], acknowledge: bool = True):
     """Danh sách loại sự cố nhân viên được chọn khi báo cáo (khách vắng, địa chỉ sai...)."""
     return result(lambda: (worker_tool.list_complaint_issue_types(), []), runtime)
 
@@ -114,8 +114,8 @@ def prepare_complaint(booking_reference: str, issue_type_id: int, content: str,
         _wid(runtime), runtime.context.thread_id, booking_reference, schedule_no, issue_type_id, content), []), runtime)
 
 
-@tool(response_format='content_and_artifact')
-def confirm_complaint(runtime: ToolRuntime[AgentContext]):
+@tool(args_schema=RuntimeOnlyInput, response_format='content_and_artifact')
+def confirm_complaint(runtime: ToolRuntime[AgentContext], acknowledge: bool = True):
     """Gửi báo cáo sự cố từ bản nháp gần nhất. CHỈ gọi sau khi nhân viên đã đồng ý rõ ràng ở tin nhắn mới nhất."""
     return result(lambda: (worker_tool.confirm_complaint(_wid(runtime), runtime.context.thread_id), []), runtime)
 

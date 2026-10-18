@@ -3,8 +3,10 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from django.db import transaction
+from django.utils import timezone
 
-from apps.ai_engine.models import ChatbotSession
+from apps.ai_engine.models import ChatbotMessage, ChatbotSession
 from apps.common.throttling import WriteScopedThrottleMixin
 from .exceptions import ChatbotError
 from .models import ChatbotRun
@@ -133,6 +135,23 @@ class RunDetailView(generics.GenericAPIView):
 
     def get(self, request, pk):
         run = get_object_or_404(ChatbotRun, pk=pk, conversation__customer=request.user)
+        if (run.status == ChatbotRun.Status.RUNNING
+                and run.lease_expires_at <= timezone.now()):
+            # Match the lock order used by _claim_run/_complete so a late model
+            # response cannot commit after this stale attempt is expired.
+            with transaction.atomic():
+                ChatbotSession.objects.select_for_update().get(
+                    pk=run.conversation_id, customer=request.user)
+                current = ChatbotRun.objects.select_for_update().get(pk=run.pk)
+                if (current.status == ChatbotRun.Status.RUNNING
+                        and current.lease_expires_at <= timezone.now()):
+                    current.status = ChatbotRun.Status.FAILED
+                    current.error_code = 'RUN_EXPIRED'
+                    current.finished_at = timezone.now()
+                    current.save(update_fields=['status', 'error_code', 'finished_at'])
+                    current.user_message.status = ChatbotMessage.Status.FAILED
+                    current.user_message.save(update_fields=['status'])
+                run = current
         return Response({'run': RunSerializer(run).data,
                          'user_message': MessageSerializer(run.user_message).data,
                          'assistant_message': MessageSerializer(run.assistant_message).data if run.assistant_message_id else None})

@@ -37,13 +37,21 @@ def search_services(query='', section_code='', page=1):
     candidates = list(qs.values('id', 'code', 'name', 'section_code', 'description')[:501])
     truncated = len(candidates) > 500
     candidates = candidates[:500]
-    tokens = normalized(query).split()
+    stop_words = {
+        'toi', 'muon', 'can', 'tim', 'dat', 'dich', 'vu', 'gia', 'bao', 'nhieu',
+        'nao', 'giup', 'cho', 'minh', 'cua', 'la', 'co', 've', 'va', 'mot',
+        'tai', 'duoc', 'khong', 'xin', 'hay', 'xem', 'loai',
+    }
+    tokens = [token for token in normalized(query).split() if token not in stop_words]
     scored = []
     for item in candidates:
         haystack = normalized(' '.join(str(item[k]) for k in ('code', 'name', 'description')))
-        score = sum(token in haystack for token in tokens)
-        if tokens and not score:
+        matched = sum(token in haystack for token in tokens)
+        # A service must match every meaningful term; matching only a generic
+        # word such as "vệ sinh" must not surface unrelated catalog entries.
+        if tokens and matched != len(tokens):
             continue
+        score = matched
         item['description'] = item['description'][:350]
         scored.append((score, item))
     scored.sort(key=lambda pair: (-pair[0], pair[1]['id']))
