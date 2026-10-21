@@ -149,7 +149,7 @@ class BookingScheduleSerializer(serializers.ModelSerializer):
         model = BookingSchedule
         fields = [
             'id', 'sequence_no', 'scheduled_start', 'scheduled_end',
-            'actual_start', 'actual_end', 'status', 'note', 'worker',
+            'actual_start', 'actual_end', 'status', 'note', 'cancel_reason', 'worker',
             'assignment_id', 'conversation_id', 'images',  # ← thêm
         ]
 

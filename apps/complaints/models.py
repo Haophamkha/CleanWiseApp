@@ -2,7 +2,7 @@
 
 from django.conf import settings
 from django.db import models
-
+from apps.common.codes import generate_code
 
 class ComplaintIssueType(models.Model):
     class Stage(models.TextChoices):
@@ -58,6 +58,7 @@ class Complaint(models.Model):
         REFUND_CUSTOMER = 'REFUND_CUSTOMER', 'Hoàn tiền khách'
         PAY_WORKER = 'PAY_WORKER', 'Trả tiền nhân viên'
 
+    code = models.CharField(max_length=30, unique=True, null=True, blank=True, editable=False)
     schedule = models.ForeignKey(
         'bookings.BookingSchedule', on_delete=models.DO_NOTHING,
         related_name='complaints', null=True, blank=True,
@@ -111,6 +112,14 @@ class Complaint(models.Model):
             models.Index(fields=['worker', 'created_at'], name='complaints_worker_created_idx'),
         ]
 
+    def save(self, *args, **kwargs):
+        # Chỉ sinh mã khi tạo mới. Khiếu nại cũ được điền mã bằng migration bên dưới.
+        if self._state.adding and not self.code:
+            self.code = generate_code(
+                'KN', lambda c: Complaint.objects.filter(code=c).exists(),
+            )
+        super().save(*args, **kwargs)
+        
     def __str__(self):
         return f'{self.booking} - {self.issue_type.name}'
 

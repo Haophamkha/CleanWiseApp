@@ -101,6 +101,7 @@ class BookingSchedule(models.Model):
         null=True,
     )
     preferred_worker_expires_at = models.DateTimeField(blank=True, null=True)
+    preferred_expiry_notified_at = models.DateTimeField(null=True, blank=True)
     completion_note = models.TextField(blank=True, null=True)
 
     cancelled_by = models.ForeignKey(

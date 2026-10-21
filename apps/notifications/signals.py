@@ -12,11 +12,11 @@ from .services import (
     notify_customer_booking_cancelled,
     notify_customer_booking_completed,
     notify_customer_booking_failed,
-    notify_customer_complaint_resolved,
+    notify_complaint_rejected,
+    notify_complaint_resolved,
     notify_customer_worker_assigned,
     notify_payment_failed,
     notify_payment_success,
-    notify_worker_booking_cancelled,
     notify_worker_profile_approved,
     notify_worker_profile_rejected,
 )
@@ -48,19 +48,8 @@ def handle_booking_status_change(sender, instance, created, **kwargs):
         return
 
     if new_status == Booking.Status.CANCELLED:
-    # Chỉ báo cho khách khi KHÔNG PHẢI khách tự hủy
-    # (worker hủy, admin hủy, hoặc hệ thống tự hủy do hết hạn)
         if instance.cancelled_by_id != instance.customer_id:
             notify_customer_booking_cancelled(instance)
-
-        # Luôn báo cho worker đã nhận việc, vì worker không tự hủy
-        accepted_assignments = BookingAssignment.objects.filter(
-            schedule__booking=instance,
-            status=BookingAssignment.Status.ACCEPTED,
-        ).select_related('worker', 'schedule')
-
-        for assignment in accepted_assignments:
-            notify_worker_booking_cancelled(assignment.schedule, assignment.worker)
 
     elif new_status == Booking.Status.COMPLETED:
         notify_customer_booking_completed(instance)
@@ -125,7 +114,9 @@ def handle_complaint_status_change(sender, instance, created, **kwargs):
         return
 
     if new_status == Complaint.Status.RESOLVED:
-        notify_customer_complaint_resolved(instance)
+        notify_complaint_resolved(instance)
+    elif new_status == Complaint.Status.REJECTED:
+        notify_complaint_rejected(instance)
 
 
 # ===================== WORKER PROFILE =====================

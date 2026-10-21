@@ -9,6 +9,7 @@ from .views import (
     WorkerWalletTransactionListView,
     WorkerWalletWithdrawDetailView,
     WorkerWalletWithdrawRequestView,
+    WorkerWalletWithdrawOtpView
 )
 from .worker_earnings import WorkerEarningHistoryView, WorkerEarningSummaryView
 
@@ -22,6 +23,7 @@ urlpatterns = [
     path('wallet/withdraw/<int:pk>/', WorkerWalletWithdrawDetailView.as_view(), name='worker-wallet-withdraw-detail'),
     path('wallet/topup/', WorkerWalletTopupCreateView.as_view(), name='worker-wallet-topup'),
     path('wallet/topup/<int:pk>/', WorkerWalletTopupDetailView.as_view(), name='worker-wallet-topup-detail'),
+    path('wallet/withdraw/otp/', WorkerWalletWithdrawOtpView.as_view(), name='worker-wallet-withdraw-otp'),
 ]
 
 # Route giả lập thanh toán: KHÔNG tồn tại trên production.

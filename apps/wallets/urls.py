@@ -9,6 +9,7 @@ from .views import (
     WalletTransactionListView,
     WalletWithdrawDetailView,
     WalletWithdrawRequestView,
+    WalletWithdrawOtpView
 )
 
 urlpatterns = [
@@ -18,6 +19,7 @@ urlpatterns = [
     path('wallet/withdraw/<int:pk>/', WalletWithdrawDetailView.as_view(), name='customer-wallet-withdraw-detail'),
     path('wallet/topup/', WalletTopupCreateView.as_view(), name='customer-wallet-topup'),
     path('wallet/topup/<int:pk>/', WalletTopupDetailView.as_view(), name='customer-wallet-topup-detail'),
+    path('wallet/withdraw/otp/', WalletWithdrawOtpView.as_view(), name='customer-wallet-withdraw-otp'),
 ]
 
 # Route giả lập thanh toán: KHÔNG tồn tại trên production.

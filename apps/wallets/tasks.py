@@ -18,3 +18,8 @@ def alert_stuck_withdraws_task():
     """Ghi log ERROR cho lệnh rút cần đối soát / treo quá lâu (Sentry hoặc Telegram bắt log ERROR)."""
     from apps.wallets.withdraw_service import alert_stuck_withdraws
     return list(alert_stuck_withdraws())
+
+@shared_task
+def reconcile_wallets_task():
+    from apps.wallets.reconcile import reconcile_wallets
+    return reconcile_wallets()

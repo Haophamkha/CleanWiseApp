@@ -81,3 +81,8 @@ _required_settings = {
 _missing = [name for name, value in _required_settings.items() if not value]
 if _missing:
     raise ImproperlyConfigured(f'Thiếu cấu hình bắt buộc cho production: {", ".join(_missing)}')
+
+
+TOPUP_MODE = 'payos'
+PAYOUT_MODE = 'payos'
+PAYOUT_ALLOW_MOCK = False

@@ -26,7 +26,7 @@ from rest_framework import serializers
 from apps.common.encryption import decrypt_value
 from apps.payments.models import UserPaymentMethod
 
-from . import payout_client, wallet_service
+from . import payout_client, wallet_service, withdraw_otp
 from .models import WalletTransaction, WithdrawRequest
 
 logger = logging.getLogger(__name__)
@@ -109,11 +109,13 @@ def _check_daily_limit(user, amount):
 
 # ------------------------------------------------------------------ tạo lệnh
 
-def create_withdraw(*, user, amount, payment_method_id=None):
+def create_withdraw(*, user, amount, payment_method_id=None, otp=None):
     """Trừ ví ngay rồi gửi lệnh chi. Trả về WithdrawRequest (SUCCESS / PROCESSING / FAILED)."""
     amount = _vnd(amount)
     _validate_amount(amount)
     method = _get_payout_method(user, payment_method_id)
+    if getattr(settings, 'WITHDRAW_OTP_REQUIRED', True):
+        withdraw_otp.verify_withdraw_otp(user, otp)
 
     # Cấu hình sai thì từ chối TRƯỚC khi đụng tiền.
     try:
@@ -158,6 +160,10 @@ def _flag_review(withdraw_id, note):
     WithdrawRequest.objects.filter(
         pk=withdraw_id, status=WithdrawRequest.Status.PROCESSING,
     ).update(needs_review=True, review_note=note[:500], updated_at=timezone.now())
+    from apps.notifications.services import notify_admins_withdraw_review
+    transaction.on_commit(
+        lambda: notify_admins_withdraw_review(withdraw_id, note[:200]),
+    )
     return WithdrawRequest.objects.get(pk=withdraw_id)
 
 
@@ -178,6 +184,9 @@ def submit_payout(withdraw_id):
     WithdrawRequest.objects.filter(pk=withdraw.pk).update(
         submit_attempts=F('submit_attempts') + 1, updated_at=timezone.now(),
     )
+    attempts, unknown = WithdrawRequest.objects.filter(pk=withdraw.pk).values_list(
+        'submit_attempts', 'had_unknown_result',
+    ).get()
     try:
         result = payout_client.create_payout(
             reference_id=withdraw.reference_id,
@@ -187,9 +196,8 @@ def submit_payout(withdraw_id):
             account_number=account_number,
         )
     except payout_client.PayoutRejected as exc:
-        if withdraw.had_unknown_result:
-            # Lần trước không rõ kết quả -> payOS có thể ĐÃ chi. Tuyệt đối không hoàn ví.
-            return _flag_review(withdraw.pk, f'Bị từ chối sau lần không rõ kết quả: {exc}')
+        if unknown or attempts > 1:
+            return _flag_review(withdraw.pk, f'Bị từ chối sau lần gọi trước đó: {exc}')
         return _finalize(withdraw.pk, success=False, reason=str(exc))
     except payout_client.PayoutUnknown:
         # Chưa biết tiền đã đi chưa -> KHÔNG hoàn ví, task đồng bộ gọi lại bằng cùng idempotency key.
@@ -228,6 +236,12 @@ def _finalize(withdraw_id, *, success, reason=''):
         withdraw.needs_review = True
         withdraw.review_note = f'Wallet tx đang {tx.status}, kết quả payout success={success}'[:500]
         withdraw.save(update_fields=['needs_review', 'review_note', 'updated_at'])
+        from apps.notifications.services import notify_admins_withdraw_review
+        transaction.on_commit(
+            lambda: notify_admins_withdraw_review(
+                withdraw.pk, withdraw.review_note[:200],
+            ),
+        )
         return withdraw
 
     if success:
@@ -244,6 +258,8 @@ def _finalize(withdraw_id, *, success, reason=''):
     withdraw.needs_review = False
     withdraw.completed_at = timezone.now()
     withdraw.save(update_fields=['status', 'failure_reason', 'needs_review', 'completed_at', 'updated_at'])
+    from apps.notifications.services import notify_withdraw_result
+    transaction.on_commit(lambda: notify_withdraw_result(withdraw))
     return withdraw
 
 

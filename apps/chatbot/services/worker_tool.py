@@ -414,7 +414,7 @@ def list_my_complaints(worker_id, page=1):
     count = qs.count()
     offset = (page - 1) * PAGE_SIZE
     return {'results': [{
-        'complaint_id': c.id, 'booking_code': c.booking.booking_code, 'issue': c.issue_type.name,
+        'complaint_id': c.id, 'booking_code': c.booking.booking_code, 'issue': c.issue_type.name,'code': c.code,
         'status': c.get_status_display(), 'created_at': _lt(c.created_at),
         'resolution_note': c.resolution_note if c.status in ('RESOLVED', 'REJECTED') else None,
         'worker_delta': str(c.worker_delta) if c.status == 'RESOLVED' else None,
@@ -561,5 +561,5 @@ def confirm_complaint(worker_id, thread_id):
         push_complaint_changed(complaint.id)
     except Exception:
         logger.exception('push_complaint_changed failed')
-    return {'complaint_id': complaint.id, 'status': complaint.get_status_display(),
+    return {'complaint_id': complaint.id, 'status': complaint.get_status_display(),'code': complaint.code,
             'booking_code': complaint.booking.booking_code}

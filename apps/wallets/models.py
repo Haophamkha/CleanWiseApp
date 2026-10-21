@@ -1,11 +1,12 @@
 from django.conf import settings
 from django.db import models
 
+from apps.common.codes import generate_code
 
 class Wallet(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='wallet',
     )
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -36,6 +37,8 @@ class WalletTransaction(models.Model):
         SUCCESS = 'SUCCESS', 'Thành công'
         FAILED = 'FAILED', 'Thất bại'
 
+    # Mã hiển thị cho người dùng, dạng GD-YYMMDD-XXXXX. Tự sinh trong save().
+    code = models.CharField(max_length=30, unique=True, null=True, blank=True, editable=False)
     wallet = models.ForeignKey(Wallet, on_delete=models.DO_NOTHING, related_name='transactions')
     type = models.CharField(max_length=20, choices=Type.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -68,10 +71,18 @@ class WalletTransaction(models.Model):
         constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name='wallet_tx_amount_check')]
         ordering = ['-created_at']
 
+    def save(self, *args, **kwargs):
+        # Chỉ sinh mã khi tạo mới. Các lệnh tx.save(update_fields=[...]) khi cập nhật không bị ảnh hưởng.
+        if self._state.adding and not self.code:
+            self.code = generate_code(
+                'GD', lambda c: WalletTransaction.objects.filter(code=c).exists(),
+            )
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.wallet} - {self.type} - {self.amount}'
-
-
+    
+    
 class WorkerEarning(models.Model):
     """
     Sổ cái thu nhập của nhân viên: mỗi buổi làm hoàn thành = 1 dòng.

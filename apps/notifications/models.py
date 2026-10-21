@@ -21,6 +21,7 @@ class Notification(models.Model):
     )
     related_worker = models.ForeignKey('authentication.WorkerProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     navigation_source = models.CharField(max_length=20, default='mine')
+    target = models.CharField(max_length=20, blank=True, default='')
     is_read = models.BooleanField(default=False)
     read_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

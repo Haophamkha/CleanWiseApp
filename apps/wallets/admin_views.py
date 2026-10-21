@@ -129,7 +129,8 @@ class AdminWalletTransactionListView(generics.GenericAPIView):
         search = params.get('search', '').strip()
         if search:
             qs = qs.filter(
-                Q(wallet__user__username__icontains=search)
+                Q(code__icontains=search)
+                | Q(wallet__user__username__icontains=search)
                 | Q(wallet__user__first_name__icontains=search)
                 | Q(wallet__user__last_name__icontains=search)
                 | Q(wallet__user__phone_number__icontains=search)
@@ -230,7 +231,7 @@ class AdminWalletTransactionExportView(AdminWalletTransactionListView):
             user = t.wallet.user
             rows.append([
                 timezone.localtime(t.created_at).strftime('%d/%m/%Y %H:%M:%S'),
-                t.id,
+                t.code or t.id,
                 user.get_full_name() or user.username,
                 user.role,
                 user.username,

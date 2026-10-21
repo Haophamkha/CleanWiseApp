@@ -31,7 +31,7 @@ def _notify(booking, amount, reason):
 
 
 @transaction.atomic
-def refund_booking(*, booking, key, note, amount=None, actor=None):
+def refund_booking(*, booking, key, note, amount=None, actor=None, reason=None):
     """
     Hoàn tiền đơn đã PAID vào ví khách. Idempotent theo `key`.
     amount=None -> hoàn toàn bộ phần còn lại. Tự chuyển REFUNDED khi đã hoàn đủ.
@@ -76,12 +76,12 @@ def refund_booking(*, booking, key, note, amount=None, actor=None):
         event_type=BookingActivity.EventType.REFUND_COMPLETED,
         message=f'Đã hoàn {amount:,.0f}đ vào ví khách hàng.', metadata=meta,
     )
-    _notify(booking, amount, None)
+    _notify(booking, amount, reason)
     return amount
 
 
 @transaction.atomic
-def refund_unmatched_payment(*, payment, booking, amount, key, note):
+def refund_unmatched_payment(*, payment, booking, amount, key, note, reason=None):
     """Tiền thật đã vào nhưng không khớp đơn (đến muộn / thiếu / dư) -> cộng ví khách. Idempotent."""
     if WalletTransaction.objects.filter(idempotency_key=key).exists():
         return None
@@ -98,8 +98,7 @@ def refund_unmatched_payment(*, payment, booking, amount, key, note):
         message=f'Đã hoàn {amount:,.0f}đ vào ví: {note}',
         metadata={'payment_id': payment.id, 'amount': str(amount), 'key': key},
     )
-    _notify(booking, amount, note)
+    _notify(booking, amount, reason)
     return amount
-
 
 

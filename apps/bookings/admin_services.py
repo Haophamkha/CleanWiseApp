@@ -6,6 +6,9 @@ from rest_framework import serializers
 from apps.addresses.models import CustomerAddress
 from apps.notifications.services import (
     create_notification_with_push,
+    fmt_time,
+    notify_customer_schedule_completed,
+    notify_customer_worker_removed,
     notify_worker_booking_cancelled,
     notify_worker_removed_from_schedule,
 )
@@ -178,26 +181,27 @@ def update_schedule_by_admin(*, schedule_id, actor, validated_data):
         for invitation in schedule.assignments.filter(status='PENDING', assigned_by__isnull=False):
             finish_invitation(invitation, 'CANCELLED', actor, 'Buổi làm đã đổi lịch. Admin cần gửi lời mời mới.')
         if schedule.preferred_worker_id:
-            schedule.preferred_worker_expires_at = timezone.now()
-            schedule.save(update_fields=['preferred_worker_expires_at', 'updated_at'])
+            now = timezone.now()
+            schedule.preferred_worker_expires_at = now
+            schedule.preferred_expiry_notified_at = now
+            schedule.save(update_fields=[
+                'preferred_worker_expires_at', 'preferred_expiry_notified_at', 'updated_at',
+            ])
+        why = validated_data.get('reason')
         message = (
-            f'Buổi {schedule.sequence_no} của đơn {schedule.booking.booking_code} '
-            f'đã được đổi lịch. Lý do: {validated_data.get("reason")}.'
+            f'Buổi {schedule.sequence_no} của đơn {schedule.booking.booking_code} đổi sang '
+            f'{fmt_time(schedule.scheduled_start)}.' + (f' Lý do: {why}.' if why else '')
         )
         create_notification_with_push(
-            schedule.booking.customer,
-            'Lịch dịch vụ đã thay đổi',
-            message,
-            Notification.Type.BOOKING,
-            schedule.booking,
+            user=schedule.booking.customer, title='Lịch dịch vụ đã thay đổi',
+            message=message, type=Notification.Type.BOOKING,
+            related_booking=schedule.booking, related_schedule=schedule,
         )
         if current_assignment:
             create_notification_with_push(
-                current_assignment.worker,
-                'Lịch làm việc đã thay đổi',
-                message,
-                Notification.Type.ASSIGNMENT,
-                schedule.booking,
+                user=current_assignment.worker, title='Lịch làm việc đã thay đổi',
+                message=message, type=Notification.Type.ASSIGNMENT,
+                related_booking=schedule.booking, related_schedule=schedule,
             )
     return schedule
 
@@ -221,7 +225,8 @@ def unassign_worker_by_admin(*, schedule_id, actor, reason):
     assignment.response_note = reason
     assignment.responded_at = timezone.now()
     assignment.save(update_fields=['status', 'response_note', 'responded_at', 'updated_at'])
-    notify_worker_removed_from_schedule(schedule, assignment.worker)
+    notify_worker_removed_from_schedule(schedule, assignment.worker, reason)
+    notify_customer_worker_removed(schedule, assignment.worker)
 
     booking = schedule.booking
     if booking.status == Booking.Status.ASSIGNED:
@@ -281,6 +286,8 @@ def complete_schedule_by_admin(*, schedule_id, actor, reason, completion_note=No
     if not still_active and booking.status == Booking.Status.IN_PROGRESS:
         booking.status = Booking.Status.COMPLETED
         booking.save(update_fields=['status', 'updated_at'])
+    if booking.status != Booking.Status.COMPLETED:
+        notify_customer_schedule_completed(schedule)
 
     record_booking_activity(
         booking=booking,

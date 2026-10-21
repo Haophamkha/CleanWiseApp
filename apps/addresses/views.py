@@ -14,7 +14,9 @@ class CustomerAddressListCreateView(generics.GenericAPIView):
     serializer_class = CustomerAddressSerializer
 
     def get_queryset(self):
-        return CustomerAddress.objects.filter(customer=self.request.user, is_active=True).order_by('-is_default', '-created_at')
+        return CustomerAddress.objects.filter(
+            customer=self.request.user, is_active=True,
+        ).order_by('-created_at', '-id')    
 
     def get(self, request, *args, **kwargs):
         return Response({'message': 'Lấy danh sách địa điểm thành công.', 'data': self.get_serializer(self.get_queryset(), many=True).data})

@@ -14,7 +14,9 @@ from .views import (
     WorkerScheduleImageUploadView,
     WorkerBookingScheduleListView,
     WorkerActiveProvinceListView,
-    WorkerDeclinePreferredView
+    WorkerDeclinePreferredView,
+    WorkerConfirmCashView,
+    WorkerMyScheduleCountsView,
 )
 
 
@@ -37,4 +39,6 @@ urlpatterns = [
     path('schedules/<int:schedule_id>/check-out/', WorkerCheckOutView.as_view(), name='worker-schedule-check-out'),
     path('schedules/<int:schedule_id>/images/', WorkerScheduleImageUploadView.as_view(), name='worker-schedule-image-upload'),
     path('provinces/', WorkerActiveProvinceListView.as_view(), name='worker-active-province-list'),
+    path('schedules/<int:schedule_id>/confirm-cash/', WorkerConfirmCashView.as_view(), name='worker-schedule-confirm-cash'),
+    path('schedules/my-schedules/counts/', WorkerMyScheduleCountsView.as_view(), name='worker-schedule-my-counts'),
 ]

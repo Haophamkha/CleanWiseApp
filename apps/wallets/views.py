@@ -4,11 +4,11 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
-
+from rest_framework.views import APIView
 from apps.common.idempotency import idempotent
 from apps.common.permissions import IsCustomerRole, IsWorkerRole
 
-from . import topup_service, wallet_service, withdraw_service
+from . import topup_service, wallet_service, withdraw_service,withdraw_otp
 from .models import WalletTopup, WalletTransaction, WithdrawRequest
 from .serializers import (
     TopupRequestSerializer,
@@ -93,6 +93,7 @@ class _WithdrawCreateBase(generics.GenericAPIView):
             user=request.user,
             amount=serializer.validated_data['amount'],
             payment_method_id=serializer.validated_data.get('payment_method_id'),
+            otp=request.data.get('otp'),
         )
         return _withdraw_response(withdraw)
 
@@ -159,6 +160,23 @@ class WalletTopupDetailView(_TopupDetailBase):
 
 class WalletWithdrawDetailView(_WithdrawDetailBase):
     permission_classes = [IsCustomerRole]
+    
+    
+class _WithdrawOtpBase(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'otp'
+
+    def post(self, request, *args, **kwargs):
+        withdraw_otp.send_withdraw_otp(request.user)
+        return Response({'message': 'Đã gửi mã OTP đến email của bạn.'})
+
+
+class WalletWithdrawOtpView(_WithdrawOtpBase):
+    permission_classes = [IsCustomerRole]
+
+
+class WorkerWalletWithdrawOtpView(_WithdrawOtpBase):
+    permission_classes = [IsWorkerRole]
 
 
 # ---------------------------------------------------------------- worker

@@ -18,7 +18,7 @@ from apps.vouchers.voucher_service import (
 )
 from apps.wallets import earning_service, refund_service
 
-from .constants import MIN_CANCEL_HOURS, AUTO_CANCEL_NOTE
+from .constants import CHECKIN_MISSED_GRACE_MINUTES, MIN_CANCEL_HOURS, AUTO_CANCEL_NOTE
 from .models import BookingAssignment, CustomerFavoriteWorker, WorkerWorkingArea
 
 from django.db.models import Case, Count, Exists, IntegerField, Max, Min, OuterRef, Q, Subquery, When
@@ -37,7 +37,6 @@ ACTIVE_SCHEDULE_STATUSES = (
 )
 
 CHECKOUT_GRACE_MINUTES = getattr(settings, 'CHECKOUT_GRACE_MINUTES', 30)
-CHECKIN_MISSED_GRACE_MINUTES = getattr(settings, 'CHECKIN_MISSED_GRACE_MINUTES', 30)
 PREFERRED_WORKER_WINDOW = timedelta(hours=1)
 PREFERRED_WORKER_START_BUFFER = timedelta(minutes=30)
 
@@ -56,7 +55,9 @@ def _hours_between(now, target):
 
 
 def _notify_admins(*, title, message, related_booking=None):
-    admins = User.objects.filter(role='ADMIN', is_active=True)
+    from apps.notifications.realtime import push_unread_count
+
+    admins = list(User.objects.filter(role='ADMIN', is_active=True))
     Notification.objects.bulk_create([
         Notification(
             user=admin, title=title, message=message,
@@ -64,6 +65,8 @@ def _notify_admins(*, title, message, related_booking=None):
         )
         for admin in admins
     ])
+    for admin in admins:
+        transaction.on_commit(lambda a=admin: push_unread_count(a.id))
 
 
 def _get_worker_profile(worker):
@@ -381,6 +384,10 @@ def handle_missed_checkins():
         assignment.response_note = AUTO_CANCEL_NOTE
         assignment.responded_at = now
         assignment.save(update_fields=['status', 'response_note', 'responded_at', 'updated_at'])
+        schedule.cancel_reason = (
+            f'Nhân viên không check-in trong {CHECKIN_MISSED_GRACE_MINUTES} phút sau giờ hẹn.'
+        )
+        schedule.save(update_fields=['cancel_reason', 'updated_at'])
 
         earning_service.release_cash_commission(assignment=assignment)
 
@@ -388,15 +395,10 @@ def handle_missed_checkins():
             booking.status = Booking.Status.PENDING
             booking.save(update_fields=['status', 'updated_at'])
 
-        Notification.objects.create(
-            user=booking.customer,
-            title='Đang tìm nhân viên khác',
-            message=f'Nhân viên không xác nhận đến làm đúng giờ cho buổi '
-                     f'{schedule.sequence_no} của đơn {booking.booking_code}. '
-                     f'CleanWise đang tìm nhân viên khác cho bạn.',
-            type=Notification.Type.ASSIGNMENT,
-            related_booking=booking,
-        )
+        from apps.notifications.services import notify_customer_worker_no_show, notify_worker_no_show
+        refunded = booking.payment_status == Booking.PaymentStatus.PAID
+        notify_customer_worker_no_show(schedule, refunded)
+        notify_worker_no_show(schedule, assignment.worker)
         _notify_admins(
             title='Worker không check-in đúng hạn',
             message=f'{assignment.worker.username} đã nhận nhưng không check-in '
@@ -452,13 +454,8 @@ def handle_missed_checkouts():
         earning_service.record_schedule_earning(schedule=schedule, booking=booking, worker=worker)
 
         if booking.status != Booking.Status.COMPLETED:
-            Notification.objects.create(
-                user=booking.customer,
-                title='Dịch vụ đã hoàn thành',
-                message=f'Buổi {schedule.sequence_no} của đơn {booking.booking_code} đã hoàn thành.',
-                type=Notification.Type.ASSIGNMENT,
-                related_booking=booking,
-            )
+            from apps.notifications.services import notify_customer_schedule_completed
+            notify_customer_schedule_completed(schedule, automatic=True)
         record_booking_activity(
             booking=booking,
             schedule=schedule,
@@ -497,7 +494,7 @@ def expire_unclaimed_schedules():
             continue
 
         schedule.status = BookingSchedule.Status.MISSED
-        schedule.cancel_reason = 'Hết hạn, không có nhân viên nhận việc.'
+        schedule.cancel_reason = schedule.cancel_reason or 'Hết hạn, không có nhân viên nhận việc.'
         schedule.cancelled_at = now
         schedule.save(update_fields=['status', 'cancel_reason', 'cancelled_at', 'updated_at'])
 
@@ -508,6 +505,7 @@ def expire_unclaimed_schedules():
                 amount=refund_service.per_session_refund_amount(booking),
                 key=f'refund:schedule:{schedule.id}:missed',
                 note=f'Hoàn tiền buổi {schedule.sequence_no} không có nhân viên - {booking.booking_code}',
+                reason=f'Buổi {schedule.sequence_no} không có nhân viên nhận.',
             )
 
         record_booking_activity(
@@ -518,13 +516,20 @@ def expire_unclaimed_schedules():
             metadata={'automatic': True},
         )
 
+        no_show = schedule.assignments.filter(response_note=AUTO_CANCEL_NOTE).exists()
         if booking.schedules.filter(status__in=ACTIVE_SCHEDULE_STATUSES).exists():
+            if not no_show:
+                from apps.notifications.services import notify_customer_schedule_missed
+                notify_customer_schedule_missed(schedule)
             continue
 
         # Không còn buổi nào chờ làm
         if booking.schedules.filter(status=BookingSchedule.Status.COMPLETED).exists():
             booking.status = Booking.Status.COMPLETED
             booking.save(update_fields=['status', 'updated_at'])
+            if not no_show:
+                from apps.notifications.services import notify_customer_schedule_missed
+                notify_customer_schedule_missed(schedule)
             continue
 
         # Chưa làm buổi nào -> đơn thất bại
@@ -543,6 +548,7 @@ def expire_unclaimed_schedules():
                 booking=booking,
                 key=f'refund:booking:{booking.id}:failed',
                 note=f'Hoàn tiền do không tìm được nhân viên - {booking.booking_code}',
+                reason='Không tìm được nhân viên cho đơn.',
             )
         if booking.user_voucher_id:
             release_user_voucher(user_voucher_id=booking.user_voucher_id, allow_used=True)
@@ -678,6 +684,28 @@ def list_available_schedules_for_worker(
 
 MY_TABS = ('upcoming', 'today', 'completed', 'cancelled')
 
+def _tab_q(tab):
+    """Điều kiện lọc của từng tab (dùng chung cho danh sách và đếm)."""
+    S = BookingSchedule.Status
+    today = timezone.localdate()
+    if tab == 'today':
+        return Q(status=S.IN_PROGRESS) | Q(status=S.PENDING, scheduled_start__date=today)
+    if tab == 'upcoming':
+        return Q(status=S.PENDING, scheduled_start__date__gt=today)
+    if tab == 'completed':
+        return Q(status=S.COMPLETED)
+    return Q(status__in=(S.CANCELLED, S.MISSED))
+
+
+def count_my_schedules_by_tab(worker):
+    """Số đơn (booking) của mỗi tab, 1 query."""
+    run_lazy_expiry(checkouts=True)
+    base = BookingSchedule.objects.filter(_my_assignment_exists(worker))
+    return base.aggregate(**{
+        tab: Count('booking_id', filter=_tab_q(tab), distinct=True)
+        for tab in MY_TABS
+    })
+
 
 def _my_assignment_exists(worker):
     """Buổi 'của tôi': đang ACCEPTED, hoặc buổi MISSED mà assignment của tôi bị
@@ -741,19 +769,8 @@ def list_my_schedules(worker, schedule_status=None, booking_id=None, tab=None):
     S = BookingSchedule.Status
     queryset = _annotate_my_progress(queryset, worker)
 
-    if tab == 'upcoming':
-        # Đang làm ghim trên cùng, rồi tới buổi gần nhất; buổi cùng đơn nằm sát nhau.
-        return queryset.filter(status__in=ACTIVE_SCHEDULE_STATUSES).annotate(
-            booking_running=Exists(
-                _my_schedules_in_booking(worker).filter(status=S.IN_PROGRESS)
-            ),
-            booking_anchor=_booking_anchor(worker, ACTIVE_SCHEDULE_STATUSES, Min),
-        ).order_by('-booking_running', 'booking_anchor', 'booking_id', 'scheduled_start')
-
-    if tab == 'today':
-        return queryset.filter(
-            scheduled_start__date=timezone.localdate(),
-        ).exclude(status__in=(S.CANCELLED, S.MISSED)).order_by('scheduled_start', 'id')
+    if tab in ('today', 'upcoming'):
+        return queryset.filter(_tab_q(tab)).order_by('scheduled_start', 'id')
 
     statuses = (S.COMPLETED,) if tab == 'completed' else (S.CANCELLED, S.MISSED)
     return queryset.filter(status__in=statuses).annotate(
@@ -974,7 +991,8 @@ def claim_booking_package(*, booking_id, worker, schedule_ids=None):
         )
 
     from apps.notifications.services import notify_customer_worker_assigned_batch
-    notify_customer_worker_assigned_batch(booking, worker, len(claimed))
+    preferred = any(a.schedule.preferred_worker_id == worker.id for a in claimed)
+    notify_customer_worker_assigned_batch(booking, worker, len(claimed), preferred=preferred)
 
     _sync_booking_status_after_claim(booking)
 
@@ -1094,7 +1112,7 @@ def decline_preferred_request(*, booking_id, worker):
         return booking  # đã mở cho mọi người rồi, bấm lại cũng không lỗi
 
     BookingSchedule.objects.filter(pk__in=active_ids).update(
-        preferred_worker_expires_at=now, updated_at=now,
+        preferred_worker_expires_at=now, preferred_expiry_notified_at=now, updated_at=now,
     )
 
     record_booking_activity(

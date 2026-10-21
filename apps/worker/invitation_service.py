@@ -48,7 +48,16 @@ def finish_invitation(invitation, status, actor=None, reason=''):
               'EXPIRED': 'đã hết hạn', 'CANCELLED': 'đã bị thu hồi'}
     schedule = invitation.schedule
     label = 'đã đóng vì buổi làm đã có người nhận' if status == 'CANCELLED' and reason == 'Tự động hủy do đã có nhân viên khác nhận việc.' else labels[status]
-    message = f'Lời mời buổi {schedule.sequence_no} {label}.'
+    who = invitation.worker.get_full_name() or invitation.worker.username
+    message = f'Lời mời buổi {schedule.sequence_no} đơn {schedule.booking.booking_code} {label}.'
+    if status in ('REJECTED', 'CANCELLED') and reason:
+        message += f' Lý do: {reason}'
+    titles = {
+        'ACCEPTED': f'{who} đã nhận lời mời',
+        'REJECTED': f'{who} đã từ chối lời mời',
+        'EXPIRED': 'Lời mời đã hết hạn',
+        'CANCELLED': 'Lời mời đã bị thu hồi',
+    }
     record_booking_activity(
         booking=schedule.booking, schedule=schedule, actor=actor,
         event_type=BookingActivity.EventType.BOOKING_UPDATED,
@@ -62,7 +71,7 @@ def finish_invitation(invitation, status, actor=None, reason=''):
                 related_schedule=schedule, extra_data={'source': 'available', 'view': 'session'})
     if recipient:
         _notify(
-            user=recipient, title='Cập nhật lời mời nhận việc', message=message,
+            user=recipient, title=titles[status], message=message,
             type=Notification.Type.ASSIGNMENT, related_booking=schedule.booking,
             related_schedule=schedule, extra_data={'source': 'available'},
         )
@@ -139,20 +148,29 @@ def withdraw_invitation(*, schedule_id, actor, reason):
             finish_invitation(invitation, 'CANCELLED', actor, reason)
         return invitations[0]
     if schedule.preferred_worker_id and schedule.preferred_worker_expires_at and schedule.preferred_worker_expires_at > timezone.now():
-        schedule.preferred_worker_expires_at = timezone.now()
-        schedule.save(update_fields=['preferred_worker_expires_at', 'updated_at'])
+        now = timezone.now()
+        schedule.preferred_worker_expires_at = now
+        schedule.preferred_expiry_notified_at = now
+        schedule.save(update_fields=[
+            'preferred_worker_expires_at', 'preferred_expiry_notified_at', 'updated_at',
+        ])
         record_booking_activity(
             booking=schedule.booking, schedule=schedule, actor=actor,
             event_type=BookingActivity.EventType.BOOKING_UPDATED,
             message=f'Admin thu hồi lời mời ưu tiên của khách cho buổi {schedule.sequence_no}.',
             new_data={'reason': reason},
         )
-        for recipient in (schedule.preferred_worker, schedule.booking.customer):
-            _notify(
-                user=recipient, title='Lời mời đã được thu hồi', message=reason,
-                type=Notification.Type.ASSIGNMENT, related_booking=schedule.booking,
-                related_schedule=schedule, extra_data={'source': 'available'},
-            )
+        from apps.notifications.services import notify_customer_preferred_withdrawn
+        _notify(
+            user=schedule.preferred_worker, title='Lời chỉ định đã bị thu hồi',
+            message=f'Lời chỉ định của khách cho buổi {schedule.sequence_no} đơn '
+                    f'{schedule.booking.booking_code} đã bị CleanWise thu hồi. Lý do: {reason}',
+            type=Notification.Type.ASSIGNMENT, related_booking=schedule.booking,
+            related_schedule=schedule, extra_data={'source': 'available'},
+        )
+        notify_customer_preferred_withdrawn(
+            schedule.booking, schedule.preferred_worker, schedule,
+        )
         return None
     raise ValidationError({'schedule': 'Không có lời mời đang hiệu lực.'})
 
