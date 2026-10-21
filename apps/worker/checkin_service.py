@@ -5,14 +5,17 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
-
+from apps.payments.models import Payment
 from apps.bookings.activity_service import record_booking_activity
 from apps.bookings.models import Booking, BookingActivity, BookingSchedule, BookingScheduleImage
 from apps.common.cloudinary_storage import (
     upload_image,
     delete_uploaded_file,
 )
-from apps.notifications.models import Notification
+from apps.notifications.services import (
+    notify_customer_schedule_completed,
+    notify_customer_worker_checked_in,
+)
 from apps.vouchers.voucher_service import mark_user_voucher_used
 
 from .models import BookingAssignment
@@ -128,13 +131,7 @@ def check_in(*, schedule_id, worker, latitude, longitude, accuracy=None):
     if booking.user_voucher_id:
         mark_user_voucher_used(user_voucher_id=booking.user_voucher_id)
 
-    Notification.objects.create(
-        user=booking.customer,
-        title='Nhân viên đã bắt đầu',
-        message=f'Nhân viên đã bắt đầu thực hiện dịch vụ cho đơn {booking.booking_code}.',
-        type=Notification.Type.ASSIGNMENT,
-        related_booking=booking,
-    )
+    notify_customer_worker_checked_in(schedule, worker)
     record_booking_activity(
         booking=booking,
         schedule=schedule,
@@ -191,13 +188,7 @@ def check_out(*, schedule_id, worker, completion_note=None):
 
     earning_service.record_schedule_earning(schedule=schedule, booking=booking, worker=worker)
     if booking.status != Booking.Status.COMPLETED:
-        Notification.objects.create(
-            user=booking.customer,
-            title='Dịch vụ đã hoàn thành',
-            message=f'Nhân viên đã hoàn thành dịch vụ cho đơn {booking.booking_code}.',
-            type=Notification.Type.ASSIGNMENT,
-            related_booking=booking,
-        )
+        notify_customer_schedule_completed(schedule)
     record_booking_activity(
         booking=booking,
         schedule=schedule,
@@ -264,3 +255,112 @@ def upload_schedule_image(*, schedule_id, worker, file, image_type, note=None):
             resource_type=uploaded.get('resource_type', 'image'),
         )
         raise
+
+
+
+CASH_REMINDER_AFTER = timedelta(hours=2)
+CASH_AUTO_CONFIRM_AFTER = timedelta(hours=24)
+
+
+def _settle_cash_payment(*, booking, schedule, payment, actor=None, automatic=False):
+    now = timezone.now()
+    payment.status = Payment.Status.SUCCESS
+    payment.paid_at = now
+    payment.save(update_fields=['status', 'paid_at', 'updated_at'])  # kích hoạt signal báo khách
+
+    booking.payment_status = Booking.PaymentStatus.PAID
+    booking.save(update_fields=['payment_status', 'updated_at'])
+
+    record_booking_activity(
+        booking=booking,
+        schedule=schedule,
+        actor=actor,
+        event_type=BookingActivity.EventType.PAYMENT_UPDATED,
+        message=(
+            f'Hệ thống tự xác nhận đã thu tiền mặt đơn {booking.booking_code}.'
+            if automatic
+            else f'Nhân viên xác nhận đã thu tiền mặt đơn {booking.booking_code}.'
+        ),
+        new_data={'payment_id': payment.id, 'paid_at': now.isoformat()},
+        metadata={'automatic': automatic},
+    )
+
+
+@transaction.atomic
+def confirm_cash_collected(*, schedule_id, worker):
+    schedule = _get_my_accepted_schedule(schedule_id=schedule_id, worker=worker)
+    booking = Booking.objects.select_for_update(of=('self',)).get(pk=schedule.booking_id)
+
+    if schedule.status != BookingSchedule.Status.COMPLETED:
+        raise serializers.ValidationError({'schedule': 'Chỉ xác nhận thu tiền sau khi đã check-out.'})
+
+    payment = (
+        Payment.objects.select_for_update()
+        .filter(booking=booking, method=Payment.Method.CASH)
+        .first()
+    )
+    if payment is None:
+        raise serializers.ValidationError({'payment': 'Đơn này không thanh toán bằng tiền mặt.'})
+    if payment.status == Payment.Status.SUCCESS:
+        return payment  # bấm lại không lỗi, không báo khách trùng
+    if payment.status != Payment.Status.PENDING:
+        raise serializers.ValidationError({'payment': 'Khoản thanh toán không ở trạng thái chờ thu.'})
+
+    if booking.status != Booking.Status.COMPLETED:
+        raise serializers.ValidationError({
+            'payment': 'Chỉ xác nhận thu tiền khi đơn đã hoàn thành toàn bộ các buổi.'
+        })
+
+    _settle_cash_payment(booking=booking, schedule=schedule, payment=payment, actor=worker)
+    return payment
+
+
+def process_pending_cash_payments():
+    """Chạy định kỳ: sau 2h nhắc worker, sau 24h tự xác nhận (trừ khi có khiếu nại đang mở)."""
+    from apps.complaints.models import Complaint
+    from apps.notifications.models import Notification
+    from apps.notifications.services import notify_worker_cash_reminder
+
+    now = timezone.now()
+    pending = Payment.objects.filter(
+        method=Payment.Method.CASH,
+        status=Payment.Status.PENDING,
+        booking__status=Booking.Status.COMPLETED,
+    ).select_related('booking')
+
+    for payment in pending:
+        schedule = (
+            payment.booking.schedules
+            .filter(status=BookingSchedule.Status.COMPLETED, actual_end__isnull=False)
+            .order_by('-actual_end').first()
+        )
+        if schedule is None:
+            continue
+        elapsed = now - schedule.actual_end
+
+        if elapsed >= CASH_AUTO_CONFIRM_AFTER:
+            with transaction.atomic():
+                booking = Booking.objects.select_for_update().get(pk=payment.booking_id)
+                locked = Payment.objects.select_for_update().get(pk=payment.pk)
+                if locked.status != Payment.Status.PENDING:
+                    continue
+                if Complaint.objects.filter(
+                    booking_id=booking.id,
+                    status__in=(Complaint.Status.PENDING, Complaint.Status.IN_REVIEW),
+                ).exists():
+                    continue
+                _settle_cash_payment(
+                    booking=booking, schedule=schedule, payment=locked, automatic=True,
+                )
+        elif elapsed >= CASH_REMINDER_AFTER:
+            assignment = schedule.assignments.filter(
+                status=BookingAssignment.Status.ACCEPTED,
+            ).select_related('worker').first()
+            if assignment is None:
+                continue
+            already = Notification.objects.filter(
+                user=assignment.worker, related_booking=payment.booking,
+                title='Nhắc xác nhận thu tiền mặt',
+            ).exists()
+            if not already:
+                notify_worker_cash_reminder(payment.booking, schedule, assignment.worker)

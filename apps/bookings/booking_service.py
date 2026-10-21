@@ -18,6 +18,7 @@ from apps.vouchers.voucher_service import (
 )
 from apps.notifications.services import notify_worker_booking_cancelled, notify_worker_schedule_cancelled
 from apps.wallets.models import WalletTransaction
+import secrets
 
 from apps.payments.models import Payment
 
@@ -233,8 +234,17 @@ def get_package_discount_percent(service, service_data):
         return Decimal('0')
 
 
+_CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+
+
 def _generate_booking_code():
-    return f"CW-{uuid.uuid4().hex[:10].upper()}"
+    day = timezone.localtime().strftime('%y%m%d')
+    for _ in range(5):
+        suffix = ''.join(secrets.choice(_CODE_ALPHABET) for _ in range(5))
+        code = f'CW-{day}-{suffix}'
+        if not Booking.objects.filter(booking_code=code).exists():
+            return code
+    raise serializers.ValidationError({'booking': 'Không tạo được mã đơn, vui lòng thử lại.'})
 
 
 def _validate_schedules(schedules):
@@ -564,6 +574,8 @@ def create_booking(
         new_data={'customer_id': customer.id, 'service_id': service.id},
     )
 
+    from apps.notifications.services import notify_booking_success
+    transaction.on_commit(lambda: notify_booking_success(booking))
     return booking
 
 
@@ -600,7 +612,9 @@ def cancel_booking_core(*, booking, actor, reason, by_admin=False):
         assignment.save(update_fields=['status', 'response_note', 'responded_at', 'updated_at'])
         if was_accepted:
             earning_service.release_cash_commission(assignment=assignment)
-            notify_worker_booking_cancelled(assignment.schedule, assignment.worker)
+            notify_worker_booking_cancelled(
+                assignment.schedule, assignment.worker, by_admin=by_admin, reason=reason,
+            )
 
     booking.status = Booking.Status.CANCELLED
     booking.cancelled_by = actor
@@ -628,6 +642,7 @@ def cancel_booking_core(*, booking, actor, reason, by_admin=False):
             booking=booking, amount=amount, actor=actor,
             key=f'refund:booking:{booking.id}:cancel',
             note=f'Hoàn tiền hủy đơn {booking.booking_code}',
+            reason='Admin đã hủy đơn.' if by_admin else 'Bạn đã hủy đơn.',
         )
 
     # Đã làm một phần thì không trả lại voucher
@@ -742,6 +757,7 @@ def cancel_schedule_by_customer(*, schedule_id, customer, reason):
             booking=booking, amount=amount, actor=customer,
             key=f'refund:schedule:{schedule.id}:customer_cancel',
             note=f'Hoàn tiền hủy buổi {schedule.sequence_no} - {booking.booking_code}',
+            reason=f'Bạn đã hủy buổi {schedule.sequence_no}.',
         )
 
     record_booking_activity(

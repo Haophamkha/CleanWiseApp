@@ -229,6 +229,7 @@ class AdminBookingDetailSerializer(serializers.ModelSerializer):
         return [
             {
                 'id': complaint.id,
+                'code': complaint.code,
                 'schedule_id': complaint.schedule_id,
                 'stage': complaint.stage,
                 'status': complaint.status,

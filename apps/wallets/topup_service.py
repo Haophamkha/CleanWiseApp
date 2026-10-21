@@ -41,7 +41,7 @@ def _limit(name, default):
 
 
 def topup_mode():
-    mode = getattr(settings, 'TOPUP_MODE', 'mock')
+    mode = getattr(settings, 'TOPUP_MODE', 'payos')
     if mode not in ('mock', 'payos'):
         raise ImproperlyConfigured("TOPUP_MODE phải là 'mock' hoặc 'payos'.")
     if mode == 'mock' and not (settings.DEBUG or getattr(settings, 'PAYOUT_ALLOW_MOCK', False)):
@@ -192,8 +192,7 @@ def refresh_topup(topup, *, force=False):
 
 
 def mock_confirm_topup(*, topup_id, user):
-    """Giả lập webhook thanh toán thành công. Chỉ chạy ở chế độ mock."""
-    if topup_mode() != 'mock':
+    if not settings.DEBUG or topup_mode() != 'mock':
         raise Http404
     topup = WalletTopup.objects.filter(pk=topup_id, user=user).first()
     if topup is None:

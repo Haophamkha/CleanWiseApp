@@ -11,11 +11,11 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = WalletTransaction
         fields = [
-            'id', 'type', 'type_display', 'amount', 'balance_after',
+            'id', 'code', 'type', 'type_display', 'amount', 'balance_after',
             'status', 'status_display', 'booking_code', 'note', 'created_at', 'direction',
         ]
-
-
+        
+        
 class WalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wallet

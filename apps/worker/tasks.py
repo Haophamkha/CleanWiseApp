@@ -71,6 +71,37 @@ def send_schedule_reminders_task():
                 
                 
 @shared_task
+def notify_preferred_expired_task():
+    from apps.notifications.services import notify_customer_preferred_expired
+    from .assignment_service import OPEN_BOOKING_STATUSES
+
+    now = timezone.now()
+    accepted = BookingAssignment.objects.filter(
+        schedule=OuterRef('pk'), status=BookingAssignment.Status.ACCEPTED,
+    )
+    schedules = (
+        BookingSchedule.objects
+        .filter(
+            status=BookingSchedule.Status.PENDING,
+            preferred_worker__isnull=False,
+            preferred_worker_expires_at__lte=now,
+            preferred_expiry_notified_at__isnull=True,
+            booking__status__in=OPEN_BOOKING_STATUSES,
+        )
+        .exclude(Exists(accepted))
+        .select_related('booking', 'booking__customer', 'preferred_worker')
+    )
+    seen = set()
+    for schedule in list(schedules):
+        claimed = BookingSchedule.objects.filter(
+            pk=schedule.pk, preferred_expiry_notified_at__isnull=True,
+        ).update(preferred_expiry_notified_at=now)
+        if claimed and schedule.booking_id not in seen:
+            seen.add(schedule.booking_id)
+            notify_customer_preferred_expired(schedule.booking, schedule.preferred_worker)
+
+
+@shared_task
 def expire_unpaid_bookings_task():
     from apps.bookings.expiry_service import expire_unpaid_bookings
     expire_unpaid_bookings()
@@ -80,3 +111,10 @@ def expire_unpaid_bookings_task():
 def release_held_earnings_task():
     from apps.wallets.earning_service import release_held_earnings
     release_held_earnings()
+    
+    
+
+@shared_task
+def process_pending_cash_payments_task():
+    from apps.worker import checkin_service
+    checkin_service.process_pending_cash_payments()

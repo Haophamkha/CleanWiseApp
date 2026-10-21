@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.bookings.models import BookingSchedule, BookingScheduleImage
+from apps.payments.models import Payment
 
 from . import assignment_service
 from .constants import MIN_CANCEL_HOURS
@@ -165,6 +166,9 @@ class WorkerScheduleSerializer(serializers.ModelSerializer):
     total_sessions = serializers.IntegerField(read_only=True)
     address_city = serializers.CharField(source='booking.address.city', read_only=True)
     address_ward = serializers.CharField(source='booking.address.ward', read_only=True)
+    payment_method = serializers.SerializerMethodField()
+    cash_to_collect = serializers.SerializerMethodField()
+    platform_fee = serializers.SerializerMethodField()
     address_latitude = serializers.DecimalField(
         source='booking.address.latitude', read_only=True, allow_null=True,
         max_digits=14, decimal_places=7,
@@ -175,7 +179,7 @@ class WorkerScheduleSerializer(serializers.ModelSerializer):
     )
     delivery_city = serializers.CharField(
         source='booking.delivery_address.city', read_only=True, allow_null=True)
-    delivery_ward = serializers.CharField(  
+    delivery_ward = serializers.CharField(
         source='booking.delivery_address.ward', read_only=True, allow_null=True)
     customer_avatar = serializers.CharField(source='booking.customer.avatar', read_only=True, allow_null=True)
     customer_name = serializers.SerializerMethodField()
@@ -187,6 +191,33 @@ class WorkerScheduleSerializer(serializers.ModelSerializer):
     is_preferred_for_me = serializers.SerializerMethodField()
     preferred_until = serializers.SerializerMethodField()
     invitation = serializers.SerializerMethodField()
+
+    def get_payment_method(self, obj):
+        payments = sorted(obj.booking.payments.all(), key=lambda p: p.created_at, reverse=True)
+        return payments[0].method if payments else None
+
+    def _pending_cash_payment(self, obj):
+        # Dùng booking__payments đã prefetch nên không phát sinh query thêm.
+        return next(
+            (p for p in obj.booking.payments.all()
+             if p.method == Payment.Method.CASH and p.status == Payment.Status.PENDING),
+            None,
+        )
+
+    def get_cash_to_collect(self, obj):
+        payment = self._pending_cash_payment(obj)
+        if payment is None:
+            return None
+        return str(payment.amount.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+
+    def get_platform_fee(self, obj):
+        # Đơn tiền mặt: hoa hồng bị trừ ví ngay lúc nhận việc (reserve_cash_commission).
+        if self._pending_cash_payment(obj) is None:
+            return None
+        from apps.wallets import earning_service  # import trong hàm để tránh vòng import
+        gross = earning_service.calculate_gross_amount(obj, obj.booking)
+        fee = earning_service.calculate_commission(gross)
+        return str(fee) if fee > 0 else None
 
     def get_invitation(self, instance):
         request = self.context.get('request')
@@ -200,6 +231,7 @@ class WorkerScheduleSerializer(serializers.ModelSerializer):
             status = 'EXPIRED'
         return {'id': invitation.id, 'source': 'ADMIN', 'status': status,
                 'expires_at': invitation.expired_at,
+                'response_note': invitation.response_note or '',
                 'sender_name': invitation.assigned_by.get_full_name() or invitation.assigned_by.username}
 
     def get_is_preferred_for_me(self, instance):
@@ -224,7 +256,9 @@ class WorkerScheduleSerializer(serializers.ModelSerializer):
             'sequence_no', 'total_sessions', 'scheduled_start', 'scheduled_end', 'status',
             'address_city', 'address_ward', 'address_latitude', 'address_longitude',
             'customer_avatar', 'customer_name', 'payment_status', 'price',
-            'service_data', 'assignment_id',"available_sessions",'delivery_city', 'delivery_ward','is_preferred_for_me', 'preferred_until', 'invitation'
+            'service_data', 'assignment_id', 'available_sessions', 'delivery_city', 'delivery_ward',
+            'is_preferred_for_me', 'preferred_until', 'invitation',
+            'payment_method', 'cash_to_collect', 'platform_fee',
         ]
         read_only_fields = fields
 
@@ -241,17 +275,9 @@ class WorkerScheduleSerializer(serializers.ModelSerializer):
         return assignment.id if assignment else None
 
     def get_price(self, instance):
-        # ĐỔI: ưu tiên đọc unit_price đã chốt sẵn trong price_breakdown lúc
-        # tạo booking (giá gốc/buổi, KHÔNG bị trừ theo % giảm gói dài hay
-        # voucher của khách -> nhân viên luôn nhận đủ, platform gánh phần
-        # giảm giá). Giá trị này không đổi khi khách hủy bớt buổi khác
-        # trong cùng booking, khác với cách chia total_amount/sessions cũ
-        # (chia lại mỗi khi sessions thay đổi).
-        #
-        # Fallback: booking cũ tạo trước khi có price_breakdown['unit_price']
-        # (hoặc dịch vụ không tính theo buổi, vd dịch vụ 1 lần không phải
-        # PER_SESSION) -> chia đều total_amount cho total_sessions như cách
-        # cũ, để không vỡ dữ liệu lịch sử.
+        # Ưu tiên unit_price đã chốt trong price_breakdown lúc tạo booking
+        # (giá gốc/buổi, không bị trừ theo giảm giá gói dài hay voucher của khách).
+        # Fallback: booking cũ chưa có unit_price -> chia đều total_amount cho total_sessions.
         breakdown = instance.booking.price_breakdown or {}
         unit_price = breakdown.get('unit_price')
         if unit_price is not None:
@@ -277,6 +303,7 @@ class WorkerMyScheduleSerializer(WorkerScheduleSerializer):
     cancel_deadline = serializers.SerializerMethodField()
     completed_sessions = serializers.SerializerMethodField()
     accepted_sessions = serializers.SerializerMethodField()
+    booking_status = serializers.CharField(source='booking.status', read_only=True)
     images = BookingScheduleImageSerializer(many=True, read_only=True)
     form_schema = serializers.JSONField(source='booking.service.form_schema', read_only=True)
     delivery_address_line = serializers.CharField(
@@ -284,9 +311,10 @@ class WorkerMyScheduleSerializer(WorkerScheduleSerializer):
 
     class Meta(WorkerScheduleSerializer.Meta):
         fields = WorkerScheduleSerializer.Meta.fields + [
-            'form_schema', 'note', 'address_line', 'receiver_name', 'receiver_phone',
-            'can_cancel', 'cancel_deadline', 'images','completion_note','delivery_address_line',
+            'form_schema', 'note', 'cancel_reason', 'address_line', 'receiver_name', 'receiver_phone',
+            'can_cancel', 'cancel_deadline', 'images', 'completion_note', 'delivery_address_line',
             'completed_sessions', 'accepted_sessions',
+            'booking_status',
         ]
         read_only_fields = fields
 
@@ -295,7 +323,7 @@ class WorkerMyScheduleSerializer(WorkerScheduleSerializer):
 
     def get_accepted_sessions(self, obj):
         return getattr(obj, 'accepted_sessions', None)
-    
+
     def get_can_cancel(self, obj):
         return (
             obj.status == BookingSchedule.Status.PENDING
@@ -315,9 +343,9 @@ class WorkerBookingScheduleSerializer(WorkerScheduleSerializer):
     """
     claim_state = serializers.SerializerMethodField()
     form_schema = serializers.JSONField(source='booking.service.form_schema', read_only=True)
-    
+
     class Meta(WorkerScheduleSerializer.Meta):
-        fields = WorkerScheduleSerializer.Meta.fields + ['form_schema','claim_state']
+        fields = WorkerScheduleSerializer.Meta.fields + ['form_schema', 'claim_state']
         read_only_fields = fields
 
     def _accepted_assignment(self, instance):
@@ -327,9 +355,8 @@ class WorkerBookingScheduleSerializer(WorkerScheduleSerializer):
         )
 
     def get_assignment_id(self, instance):
-        # Ghi đè: chỉ trả assignment_id nếu buổi đó là CỦA WORKER ĐANG GỌI
-        # API (khác với bản gốc chỉ check "có ai ACCEPTED"), để FE không
-        # nhầm assignment của người khác thành của mình khi hiện nút hủy.
+        # Ghi đè: chỉ trả assignment_id nếu buổi đó là CỦA WORKER ĐANG GỌI API,
+        # để FE không nhầm assignment của người khác thành của mình khi hiện nút hủy.
         request = self.context.get('request')
         worker_id = getattr(getattr(request, 'user', None), 'id', None)
         assignment = self._accepted_assignment(instance)
@@ -361,7 +388,6 @@ class WorkerBookingScheduleSerializer(WorkerScheduleSerializer):
         return 'OPEN'
 
 
-
 class CancelAssignmentSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=500, trim_whitespace=True)
 
@@ -369,10 +395,8 @@ class CancelAssignmentSerializer(serializers.Serializer):
 class ClaimBookingPackageSerializer(serializers.Serializer):
     """
     Body cho POST /bookings/<booking_id>/claim/.
-    - Không gửi `schedule_ids` (hoặc bỏ trống field khỏi body) -> nhận
-      toàn bộ buổi PENDING còn trống của booking.
-    - Gửi `schedule_ids` -> chỉ nhận đúng các buổi đó (1 buổi hoặc 1 phần
-      trong gói).
+    - Không gửi `schedule_ids` -> nhận toàn bộ buổi PENDING còn trống của booking.
+    - Gửi `schedule_ids` -> chỉ nhận đúng các buổi đó.
     """
     schedule_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
@@ -396,7 +420,7 @@ class ScheduleImageUploadSerializer(serializers.Serializer):
     image = serializers.ImageField()
     image_type = serializers.ChoiceField(choices=BookingScheduleImage.ImageType.choices)
     note = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    
+
 
 class CheckOutSerializer(serializers.Serializer):
     completion_note = serializers.CharField(required=False, allow_blank=True, allow_null=True)

@@ -5,7 +5,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
-
+from django.db.models import Q
 from django.db import transaction
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -176,6 +176,19 @@ class ComplaintListCreateView(generics.ListCreateAPIView):
             if schedule_filter:
                 queryset = queryset.filter(
                     schedule_id=schedule_filter
+                )
+
+            search = (
+                self.request.query_params.get("search") or ""
+            ).strip()
+
+            if search:
+                queryset = queryset.filter(
+                    Q(code__icontains=search)
+                    | Q(booking__booking_code__icontains=search)
+                    | Q(reporter__username__icontains=search)
+                    | Q(reporter__first_name__icontains=search)
+                    | Q(reporter__last_name__icontains=search)
                 )
 
             return queryset

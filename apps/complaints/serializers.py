@@ -54,8 +54,8 @@ class ComplaintAttachmentSerializer(serializers.ModelSerializer):
 class ComplaintCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Complaint
-        fields = ['id', 'booking', 'schedule', 'issue_type', 'content']
-        read_only_fields = ['id']
+        fields = ['id', 'code', 'booking', 'schedule', 'issue_type', 'content']
+        read_only_fields = ['id', 'code']
 
     def validate_booking(self, booking):
         request = self.context['request']
@@ -191,6 +191,7 @@ class ComplaintCreateSerializer(serializers.ModelSerializer):
         stage = self._stage_for(booking, validated_data['issue_type'])
         worker = self._infer_worker(role=role, user=request.user, schedule=schedule)
 
+        # complaint.code được Complaint.save() tự sinh.
         complaint = Complaint.objects.create(
             reporter=request.user,
             reporter_role=role,
@@ -203,12 +204,11 @@ class ComplaintCreateSerializer(serializers.ModelSerializer):
             schedule=complaint.schedule,
             actor=request.user,
             event_type=BookingActivity.EventType.COMPLAINT_CREATED,
-            message=f'{"Nhân viên" if role == "WORKER" else "Khách hàng"} tạo khiếu nại #{complaint.id}.',
-            new_data={'complaint_id': complaint.id, 'stage': complaint.stage},
+            message=f'{"Nhân viên" if role == "WORKER" else "Khách hàng"} tạo khiếu nại {complaint.code}.',
+            new_data={'complaint_id': complaint.id, 'code': complaint.code, 'stage': complaint.stage},
         )
         return complaint
-
-
+    
 class ComplaintListSerializer(serializers.ModelSerializer):
     booking_code = serializers.CharField(source='booking.booking_code', read_only=True)
     schedule_sequence_no = serializers.IntegerField(
@@ -224,14 +224,14 @@ class ComplaintListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Complaint
         fields = [
-            'id', 'booking', 'booking_code', 'schedule', 'schedule_sequence_no',
+            'id', 'code', 'booking', 'booking_code', 'schedule', 'schedule_sequence_no',
             'reporter_role', 'issue_type', 'issue_type_code', 'issue_type_name',
             'stage', 'stage_label', 'status',
             'reporter_name', 'worker', 'worker_name',
             'status_label', 'created_at',
         ]
-
-
+        
+        
 class ComplaintDetailSerializer(serializers.ModelSerializer):
     booking_code = serializers.CharField(source='booking.booking_code', read_only=True)
     schedule_sequence_no = serializers.IntegerField(
@@ -248,13 +248,14 @@ class ComplaintDetailSerializer(serializers.ModelSerializer):
     stage_label = serializers.CharField(source='get_stage_display', read_only=True)
     status_label = serializers.CharField(source='get_status_display', read_only=True)
     my_amount = serializers.SerializerMethodField()
+    booking_is_cash = serializers.SerializerMethodField()
 
     class Meta:
         model = Complaint
         fields = [
-            'id', 'reporter', 'reporter_role', 'reporter_name',
+            'id', 'code', 'reporter', 'reporter_role', 'reporter_name',
             'worker', 'worker_name',
-            'booking', 'booking_code', 'schedule', 'schedule_sequence_no',
+            'booking', 'booking_code', 'booking_is_cash', 'schedule', 'schedule_sequence_no',
             'issue_type', 'issue_type_code', 'issue_type_name',
             'stage', 'stage_label',
             'content',
@@ -265,6 +266,9 @@ class ComplaintDetailSerializer(serializers.ModelSerializer):
             'created_at', 'attachments',
         ]
         read_only_fields = fields
+
+    def get_booking_is_cash(self, obj):
+        return any(p.method == 'CASH' for p in obj.booking.payments.all())
 
     def get_my_amount(self, obj):
         """Số tiền đã cộng (+) / trừ (-) vào ví của CHÍNH người gửi khiếu nại."""
@@ -281,8 +285,10 @@ class ComplaintDetailSerializer(serializers.ModelSerializer):
             for key in ('customer_delta', 'worker_delta', 'shortfall'):
                 data.pop(key, None)
         return data
-
-
+    
+    
+    
+    
 class ComplaintResolveSerializer(serializers.ModelSerializer):
     status = serializers.ChoiceField(choices=[
         Complaint.Status.IN_REVIEW.value,

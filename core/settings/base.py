@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from datetime import time, timedelta
 from corsheaders.defaults import default_headers
+from celery.schedules import crontab
 
 # Đường dẫn gốc tới thư mục project (nhảy lên 3 cấp từ core/settings/base.py)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -370,6 +371,12 @@ CELERY_BEAT_SCHEDULE = {
         'options': {'expires': 290},
     },
 
+    'notify-preferred-expired': {
+        'task': 'apps.worker.tasks.notify_preferred_expired_task',
+        'schedule': 60.0,
+        'options': {'expires': 55},
+    },
+
     'expire-unpaid-bookings': {
         'task': 'apps.worker.tasks.expire_unpaid_bookings_task',
         'schedule': 60.0,
@@ -399,6 +406,16 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 300.0,
         'options': {'expires': 290},
     },
+    'reconcile-wallets': {
+        'task': 'apps.wallets.tasks.reconcile_wallets_task',
+        'schedule': crontab(hour=2, minute=0),  # 2h sáng mỗi đêm (CELERY_TIMEZONE = Asia/Ho_Chi_Minh)
+        'options': {'expires': 3600},
+    },
+    'process-pending-cash-payments': {
+        'task': 'apps.worker.tasks.process_pending_cash_payments_task',
+        'schedule': 600.0,
+        'options': {'expires': 590},
+    },
 }
 
 
@@ -420,3 +437,5 @@ PAYOUT_METHOD_COOLDOWN_HOURS = int(os.environ.get("PAYOUT_METHOD_COOLDOWN_HOURS"
 # Khung giờ nhận lịch: giờ BẮT ĐẦU phải nằm trong khoảng này
 BOOKING_OPEN_TIME = time(8, 0)
 BOOKING_LAST_START_TIME = time(18, 0)
+
+WITHDRAW_OTP_REQUIRED = os.environ.get('WITHDRAW_OTP_REQUIRED', '1') == '1'

@@ -37,6 +37,7 @@ def _return_to_wallet(*, payment, booking, amount, key, reason):
     refund_service.refund_unmatched_payment(
         payment=payment, booking=booking, amount=amount, key=key,
         note=f'{reason} - {booking.booking_code}',
+        reason=reason,
     )
 
 
@@ -118,5 +119,6 @@ def handle_payos_webhook(webhook_data):
         refund_service.refund_unmatched_payment(
             payment=payment, booking=booking, amount=extra, key=f'over:{payment.id}',
             note=f'Hoàn phần chuyển dư - {booking.booking_code}',
+            reason='Bạn chuyển dư so với số tiền của đơn.',
         )
     return payment

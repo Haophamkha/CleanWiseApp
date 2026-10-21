@@ -11,7 +11,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'message', 'type', 'type_display',
             'related_booking', 'related_schedule', 'related_worker',
-            'is_read', 'read_at', 'created_at', 'navigation_source',
+            'is_read', 'read_at', 'created_at', 'navigation_source', 'target',
         ]
         read_only_fields = fields
 

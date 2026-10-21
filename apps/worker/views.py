@@ -155,10 +155,9 @@ def _base_select_related(queryset):
 def _prefetch_assignments(queryset, *, with_images=False):
     queryset = _base_select_related(queryset).prefetch_related(
         Prefetch('assignments', queryset=BookingAssignment.objects.select_related('assigned_by', 'worker')),
+        'booking__payments',
     )
     if with_images:
-        # Ảnh trước/sau chỉ cần ở my-schedules (WorkerMyScheduleSerializer),
-        # không cần ở available nên tách riêng bằng cờ with_images.
         queryset = queryset.prefetch_related('images')
     return queryset
 
@@ -597,3 +596,29 @@ class WorkerInvitationResponseView(generics.GenericAPIView):
                 pass
         return Response({'message': 'Đã nhận việc.' if action == 'accept' else 'Đã từ chối lời mời.',
                          'data': {'id': invitation.id, 'status': invitation.status}})
+        
+        
+
+class WorkerConfirmCashView(APIView):
+    permission_classes = [IsWorkerRole]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'worker_action'
+
+    def post(self, request, *args, **kwargs):
+        payment = checkin_service.confirm_cash_collected(
+            schedule_id=kwargs['schedule_id'], worker=request.user,
+        )
+        return Response({
+            'message': 'Đã xác nhận thu tiền mặt.',
+            'data': {'payment_id': payment.id, 'status': payment.status},
+        })
+        
+        
+class WorkerMyScheduleCountsView(APIView):
+    permission_classes = [IsWorkerRole]
+
+    def get(self, request, *args, **kwargs):
+        return Response({
+            'message': 'Lấy số lượng đơn theo tab thành công.',
+            'data': assignment_service.count_my_schedules_by_tab(request.user),
+        })

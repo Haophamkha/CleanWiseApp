@@ -74,7 +74,7 @@ def _reverse_worker_earning(*, complaint, admin):
         return ZERO, ZERO
     return _debit_up_to(
         user=earning.worker, owed=earning.worker_amount, booking=booking, admin=admin,
-        note=f'Thu hồi thu nhập buổi {schedule.sequence_no} - {booking.booking_code} (khiếu nại #{complaint.id})',
+        note=f'Thu hồi thu nhập buổi {schedule.sequence_no} - {booking.booking_code} (khiếu nại {complaint.code})',
         key=f'complaint:{complaint.id}:worker-clawback',
     )
 
@@ -92,7 +92,8 @@ def _refund_customer(*, complaint, admin, charge_worker):
     refunded = refund_service.refund_booking(
         booking=booking, amount=cap, actor=admin,
         key=f'refund:schedule:{schedule.id}:complaint:{complaint.id}',
-        note=f'Hoàn tiền buổi {schedule.sequence_no} - {booking.booking_code} (khiếu nại #{complaint.id})',
+        note=f'Hoàn tiền buổi {schedule.sequence_no} - {booking.booking_code} (khiếu nại {complaint.code})',
+        reason=f'Khiếu nại {complaint.code} được giải quyết.',
     )
     if not refunded:
         raise serializers.ValidationError({'outcome': 'Không hoàn được: đơn chưa thanh toán hoặc đã hoàn hết.'})
@@ -139,9 +140,14 @@ def _pay_worker(*, complaint, admin):
 
     wallet_service.credit_wallet(
         user=worker, amount=payout, type=TX.Type.EARNING, booking=booking, created_by=admin,
-        note=f'Thu nhập buổi {schedule.sequence_no} - {booking.booking_code} (khiếu nại #{complaint.id})',
+        note=f'Thu nhập buổi {schedule.sequence_no} - {booking.booking_code} (khiếu nại {complaint.code})',
         idempotency_key=f'earning:{earning.id}',
     )
+    from apps.notifications.services import notify_wallet_adjustment
+    transaction.on_commit(lambda: notify_wallet_adjustment(
+        worker, payout, 'CREDIT',
+        f'Khiếu nại {complaint.code} được giải quyết, ghi nhận thu nhập buổi {schedule.sequence_no}',
+    ))
     earning.wallet_credited_at = now
     earning.save(update_fields=['wallet_credited_at', 'settled_at'])
 
@@ -153,7 +159,7 @@ def _pay_worker(*, complaint, admin):
     if owed > 0:
         taken, short = _debit_up_to(
             user=booking.customer, owed=owed, booking=booking, admin=admin,
-            note=f'Thu hồi tiền buổi {schedule.sequence_no} - {booking.booking_code} (khiếu nại #{complaint.id})',
+            note=f'Thu hồi tiền buổi {schedule.sequence_no} - {booking.booking_code} (khiếu nại {complaint.code})',
             key=f'clawback:schedule:{schedule.id}:complaint:{complaint.id}',
         )
         if taken and not cash:
@@ -184,7 +190,7 @@ def apply_outcome(*, complaint, admin, outcome, charge_worker=True):
     record_booking_activity(
         booking=complaint.booking, schedule=complaint.schedule, actor=admin,
         event_type=BookingActivity.EventType.BOOKING_UPDATED,
-        message=f'Xử lý tiền khiếu nại #{complaint.id}: {outcome}.',
+        message=f'Xử lý tiền khiếu nại {complaint.code}: {outcome}.',
         metadata={k: str(v) for k, v in r.items()},
     )
     return complaint
