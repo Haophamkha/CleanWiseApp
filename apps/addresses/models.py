@@ -21,7 +21,7 @@ class CustomerAddress(models.Model):
 
     class Meta:
         db_table = 'customer_addresses'
-        ordering = ['-is_default', '-created_at']
+        ordering = ['-created_at', '-id']
         constraints = [
             models.UniqueConstraint(
                 fields=['customer'],
