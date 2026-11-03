@@ -60,7 +60,7 @@ def _refresh_worker_average_rating(worker_id):
 
 def _validate_assignment_for_review(assignment, customer):
     if assignment.schedule.booking.customer_id != customer.id:
-        raise serializers.ValidationError({'assignment_id': 'Buổi làm việc không thuộc đơn hàng của bạn.'})
+        raise serializers.ValidationError({'assignment_id': 'Buổi làm việc không thuộc đơn dịch vụ của bạn.'})
     if assignment.status != BookingAssignment.Status.ACCEPTED:
         raise serializers.ValidationError({'assignment_id': 'Nhân viên không còn được phân công cho buổi này.'})
     if assignment.schedule.status != BookingSchedule.Status.COMPLETED:

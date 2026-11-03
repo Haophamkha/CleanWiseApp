@@ -99,7 +99,7 @@ def check_in(*, schedule_id, worker, latitude, longitude, accuracy=None):
         raise serializers.ValidationError({'schedule': 'Buổi làm việc không ở trạng thái chờ thực hiện.'})
 
     if booking.status not in OPEN_BOOKING_STATUSES:
-        raise serializers.ValidationError({'schedule': 'Đơn hàng không ở trạng thái có thể bắt đầu.'})
+        raise serializers.ValidationError({'schedule': 'Đơn dịch vụ không ở trạng thái có thể bắt đầu.'})
 
     now = timezone.now()
     earliest = schedule.scheduled_start - timedelta(minutes=CHECKIN_EARLY_MINUTES)

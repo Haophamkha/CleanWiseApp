@@ -336,6 +336,7 @@ def notify_worker_new_job(assignment):
         message=f'Đơn {code(booking)} bắt đầu lúc {fmt_time(assignment.schedule.scheduled_start)}.',
         type=Notification.Type.ASSIGNMENT,
         related_booking=booking,
+        related_schedule=assignment.schedule,
     )
 
 
@@ -368,6 +369,8 @@ def notify_worker_schedule_reminder(schedule, worker):
         message=f'Đơn {code(schedule.booking)} bắt đầu lúc {fmt_time(schedule.scheduled_start)}.',
         type=Notification.Type.BOOKING,
         related_booking=schedule.booking,
+        related_schedule=schedule, 
+        extra_data={'source': 'mine', 'view': 'session'},  
     )
 
 
