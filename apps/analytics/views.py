@@ -11,6 +11,27 @@ from apps.common.permissions import IsAdminRole
 from apps.common.xlsx import workbook_bytes
 from .report_service import Report, ReportParams, ZONE
 from .favorite_report import FavoriteReportParams, monthly_favorite_report
+from .vip_report import VipReportParams, VipRewardInput, monthly_vip_report, reward_vip_customers
+
+
+class MonthlyVipReportView(APIView):
+    permission_classes = [IsAdminRole]
+
+    @extend_schema(parameters=[VipReportParams], responses=OpenApiTypes.OBJECT, tags=['Admin reports'])
+    def get(self, request):
+        params = VipReportParams(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        return Response({'data': monthly_vip_report(params.validated_data)})
+
+
+class MonthlyVipRewardView(APIView):
+    permission_classes = [IsAdminRole]
+
+    @extend_schema(request=VipRewardInput, responses=OpenApiTypes.OBJECT, tags=['Admin reports'])
+    def post(self, request):
+        params = VipRewardInput(data=request.data)
+        params.is_valid(raise_exception=True)
+        return Response({'data': reward_vip_customers(params.validated_data, request.user)})
 
 
 class MonthlyFavoriteReportView(APIView):
@@ -78,6 +99,28 @@ class ReportBookingsView(ReportView):
     def get(self, request):
         report = self.report(request)
         return Response({'data': self.paginated(report, report.booking_queryset(), report.booking_row)})
+
+
+class ReportAuditView(ReportView):
+    @extend_schema(parameters=[ReportParams], responses=OpenApiTypes.OBJECT, tags=['Admin reports'])
+    def get(self, request):
+        from apps.bookings.models import BookingSchedule
+        report = self.report(request)
+        kind = request.query_params.get('kind', 'missing_earning')
+        if kind == 'missing_earning':
+            rows = report.completed.filter(worker_earning__isnull=True)
+            issue = 'Thiếu sổ thu nhập'
+        elif kind == 'missing_end':
+            rows = BookingSchedule.objects.filter(status='COMPLETED', actual_end__isnull=True)
+            issue = 'Thiếu giờ kết thúc · Toàn hệ thống'
+        else:
+            raise serializers.ValidationError({'kind': 'Loại đối soát không hợp lệ.'})
+        rows = rows.select_related('booking').order_by('-scheduled_start', '-id')
+        return Response({'data': self.paginated(report, rows, lambda row: {
+            'schedule_id': row.id, 'booking_id': row.booking_id, 'booking_code': row.booking.booking_code,
+            'sequence_no': row.sequence_no, 'scheduled_start': row.scheduled_start,
+            'actual_end': row.actual_end, 'issue': issue,
+        })})
 
 
 class ReportExportView(ReportView):
