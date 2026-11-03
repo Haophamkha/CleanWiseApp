@@ -36,7 +36,7 @@ def _cache_old_status(sender_model):
 
 # ===================== BOOKING =====================
 
-pre_save.connect(_cache_old_status(Booking), sender=Booking)
+pre_save.connect(_cache_old_status(Booking), sender=Booking, weak=False)
 
 
 @receiver(post_save, sender=Booking)
@@ -60,7 +60,7 @@ def handle_booking_status_change(sender, instance, created, **kwargs):
 
 # ===================== BOOKING ASSIGNMENT (worker nhận lịch) =====================
 
-pre_save.connect(_cache_old_status(BookingAssignment), sender=BookingAssignment)
+pre_save.connect(_cache_old_status(BookingAssignment), sender=BookingAssignment, weak=False)
 
 
 @receiver(post_save, sender=BookingAssignment)
@@ -83,8 +83,7 @@ def handle_assignment_status_change(sender, instance, created, **kwargs):
 
 # ===================== PAYMENT =====================
 
-pre_save.connect(_cache_old_status(Payment), sender=Payment)
-
+pre_save.connect(_cache_old_status(Payment), sender=Payment, weak=False)
 
 @receiver(post_save, sender=Payment)
 def handle_payment_status_change(sender, instance, created, **kwargs):
@@ -102,8 +101,7 @@ def handle_payment_status_change(sender, instance, created, **kwargs):
 
 # ===================== COMPLAINT =====================
 
-pre_save.connect(_cache_old_status(Complaint), sender=Complaint)
-
+pre_save.connect(_cache_old_status(Complaint), sender=Complaint, weak=False)
 
 @receiver(post_save, sender=Complaint)
 def handle_complaint_status_change(sender, instance, created, **kwargs):
