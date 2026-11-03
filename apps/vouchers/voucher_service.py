@@ -159,7 +159,7 @@ def validate_and_calculate_voucher(
     subtotal = _to_money(subtotal_amount)
     if subtotal < voucher.min_order_amount:
         raise serializers.ValidationError({
-            error_field: f'Đơn hàng tối thiểu phải đạt {voucher.min_order_amount}.',
+            error_field: f'Đơn dịch vụ tối thiểu phải đạt {voucher.min_order_amount}.',
         })
     return {'user_voucher': user_voucher, 'voucher': voucher, **calculate_voucher_discount(voucher, subtotal)}
 

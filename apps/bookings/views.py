@@ -90,7 +90,7 @@ class BookingListCreateView(generics.GenericAPIView):
 
             if status_param not in Booking.Status.values:
                 raise ValidationError({
-                    'status': 'Trạng thái đơn hàng không hợp lệ.',
+                    'status': 'Trạng thái đơn dịch vụ không hợp lệ.',
                 })
 
             queryset = queryset.filter(
@@ -122,7 +122,7 @@ class BookingListCreateView(generics.GenericAPIView):
         ).data
 
         return Response({
-            'message': 'Lấy danh sách đơn hàng thành công.',
+            'message': 'Lấy danh sách đơn dịch vụ thành công.',
             'data': {
                 'results': serialized,
                 'count': paginator.page.paginator.count,
@@ -202,7 +202,7 @@ class BookingDetailView(generics.GenericAPIView):
         )
 
         return Response({
-            'message': 'Lấy chi tiết đơn hàng thành công.',
+            'message': 'Lấy chi tiết đơn dịch vụ thành công.',
             'data': serializer.data,
         })
 

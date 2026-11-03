@@ -49,7 +49,7 @@ VOUCHER_VALIDATE_SCHEMA = extend_schema_view(
     post=extend_schema(
         operation_id='customer_voucher_validate',
         summary='Kiểm tra và tính toán giảm giá voucher',
-        description='Xác thực mã voucher trong ví của khách hàng có hợp lệ với tổng tiền đơn hàng (subtotal_amount) hiện tại hay không, đồng thời trả về số tiền được giảm.',
+        description='Xác thực mã voucher trong ví của khách hàng có hợp lệ với tổng tiền đơn dịch vụ (subtotal_amount) hiện tại hay không, đồng thời trả về số tiền được giảm.',
         tags=['Voucher - Customer']
     )
 )
